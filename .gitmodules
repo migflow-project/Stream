@@ -1,0 +1,3 @@
+[submodule "deps/ava"]
+	path = deps/ava
+	url = git@git.immc.ucl.ac.be:mema/ava.git
