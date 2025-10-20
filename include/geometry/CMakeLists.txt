@@ -9,4 +9,6 @@ target_sources(geometry PUBLIC
     FILES ${CMAKE_CURRENT_SOURCE_DIR}/vec.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/bbox.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.hpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/morton.hpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/lbvh.hpp
 )

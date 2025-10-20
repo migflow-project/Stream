@@ -56,6 +56,7 @@ namespace stream::geo {
 template<typename _Scalar, int dim>
 struct Vec {
     using VecT = Vec<_Scalar, dim>;
+    using BBoxT = BBox<_Scalar, dim>;
     using Scalar = _Scalar;
 
     Scalar coord[dim];
