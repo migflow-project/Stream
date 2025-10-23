@@ -3,6 +3,7 @@ target_sources(geometry
             ${CMAKE_CURRENT_SOURCE_DIR}/bbox.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/lbvh.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/lbvh_agglo.cpp
 )
 
 if (ENABLE_CUDA) 
@@ -10,4 +11,5 @@ if (ENABLE_CUDA)
     set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/bbox.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
     set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
     set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/lbvh.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/lbvh_agglo.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
 endif()
