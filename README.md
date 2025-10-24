@@ -1,4 +1,4 @@
-# Stream : an implementation of the PFEM for incompressible free-surface flows.
+# Stream : a GPU implementation of the PFEM for incompressible free-surface flows.
 
 > [!NOTE] Stream 
 > A continuous flow of fluid, data or instructions.
@@ -12,9 +12,6 @@ of the Particle Finite Element Method pipeline :
 - Assembly of the linear system of equations 
 - Solution of the system
 
-If you'd rather use your own mesher : you can supply you mesh to the library.
-And if you'd rather use your own solver : the matrix is assembled in CSR and can be retrieved.
-
 ## Requirements 
 
 The bare minimum to be able to compile and run the code is the following :
@@ -24,7 +21,7 @@ The bare minimum to be able to compile and run the code is the following :
 
 Optional, but strongly recommended requirements include :
 
-- a CUDA compiler OR a HIP compiler.
+- a GPU compiler (CUDA/HIP, depending on your target hardware)
 
 ## Compilation 
 
@@ -37,9 +34,11 @@ mkdir build && cd build
 
 # Configure the project 
 cmake .. [additional config options]
+# e.g. : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=ON -DENABLE_CUDA=ON
 
-# Compile the code 
-make
+# Compile the code. NOTE : -j is strongly recommended when compiling for GPU
+# as it is much slower than classical CPU compilation
+make -j
 ```
 
 ### Configuration options :
@@ -57,7 +56,8 @@ The usual CMake configuration options such as `-DCMAKE_BUILD_TYPE` are also vali
 ## Project Structure
 
 ```text 
-
+|- deps/                   # Contains dependencies               
+   |- ava/                 # Required dependency : CPU/GPU portable compilation
 |- include/                # Public include files
    |- geometry/            # Geometry module: spatial search structures, geometric primitives...
    |- mesh/                # Mesh module: mesh generation, mesh adaptation, size-fields...
@@ -69,5 +69,10 @@ The usual CMake configuration options such as `-DCMAKE_BUILD_TYPE` are also vali
    |- mesh/ 
    |- numerics/
    |- fem/
-
+|- tests/                  # Tests functionalities against known results, or for performance
+   |- geometry/
+   |- mesh/ 
+   |- numerics/
+|- testcases/              # Physical testcases (e.g. Hysing, Dam break...)
+|- python/                 # Python API 
 ```

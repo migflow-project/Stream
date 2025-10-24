@@ -9,3 +9,15 @@ target_include_directories(geometry
 )
 
 add_subdirectory(geometry/)
+
+target_include_directories(numerics
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/numerics/>
+           $<INSTALL_INTERFACE:include/stream/numerics/>
+)
+
+target_include_directories(numerics
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>
+           $<INSTALL_INTERFACE:include/stream/>
+)
+
+add_subdirectory(numerics/)

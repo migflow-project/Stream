@@ -52,8 +52,13 @@ add_library(geometry SHARED)
 add_library(Stream::geometry ALIAS geometry)
 target_include_directories(geometry PUBLIC "${AVA_INCLUDE_DIRS}")
 
+add_library(numerics SHARED)
+add_library(Stream::numerics ALIAS numerics)
+target_include_directories(numerics PUBLIC "${AVA_INCLUDE_DIRS}")
+
 if (ENABLE_CUDA)
     set_property(TARGET geometry PROPERTY CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
+    set_property(TARGET numerics PROPERTY CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
 endif()
 
 # ============================= Add directories ===============================
