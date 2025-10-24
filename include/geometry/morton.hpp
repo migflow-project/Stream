@@ -25,6 +25,20 @@ namespace stream::geo {
         return splitBy3(x) | (splitBy3(y) << 1) | (splitBy3(z) << 2);
     };
 
+    __host__ __device__ inline uint32_t splitBy3_32(uint32_t const a) {
+        uint32_t x = a & 0x000003ff ;  // we only look at the first 10 bits
+        x = (x | x << 16) & 0x30000ff ;  
+        x = (x | x << 8)  & 0x0300f00f;  
+        x = (x | x << 4)  & 0x30c30c3 ;  
+        x = (x | x << 2)  & 0x9249249 ;
+        return x;
+    };
+
+    // Merge bits representation of 3 integers into one.
+    __host__ __device__ inline uint32_t encode_magicbits3D_32(uint32_t const x, uint32_t const y, uint32_t const z) {
+        return splitBy3_32(x) | (splitBy3_32(y) << 1) | (splitBy3_32(z) << 2);
+    };
+
     // Seperate bits from a given integer 2 positions apart
     // eg : 111 becomes 10101
     __host__ __device__ inline uint64_t splitBy2(uint32_t const a) {
@@ -38,10 +52,24 @@ namespace stream::geo {
         return x;
     };
 
-    // Merge bits representation of 2 integers into one.
+    // Merge bits representation of 2 32 bits integers into one 64 bit integer.
     __host__ __device__ inline uint64_t encode_magicbits2D(uint32_t const x, uint32_t const y) {
         return splitBy2(x) | (splitBy2(y) << 1);
     };
-} // namespace stream::geo
 
+    __host__ __device__ inline uint32_t splitBy2_32(uint32_t const a) {
+        uint32_t x = a;
+        x = (x | x << 16) & 0x0000FFFF;  
+        x = (x | x << 8)  & 0x00FF00FF;  
+        x = (x | x << 4)  & 0x0F0F0F0F;  
+        x = (x | x << 2)  & 0x33333333;
+        x = (x | x << 1)  & 0x55555555;
+        return x;
+    };
+
+    // Merge bits representation of 2 32 bits integers into one 32 bit integer.
+    __host__ __device__ inline uint32_t encode_magicbits2D_32(uint32_t const x, uint32_t const y) {
+        return splitBy2_32(x) | (splitBy2_32(y) << 1);
+    };
+} // namespace stream::geo
 #endif // __STREAM_MORTON_HPP__
