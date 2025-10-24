@@ -274,12 +274,14 @@ namespace stream::geo {
                         d_parent_v(idx) = parent;
                         d_child_left_v(parent-n_v) = idx;
                         d_range_min_v(parent-n_v) = imin;
+                        __threadfence();
                     } else {
                         // Attach node to left parent
                         parent = imin + n_v - 1;
                         d_parent_v(idx) = parent;
                         d_child_right_v(parent-n_v) = idx;
                         d_range_max_v(parent-n_v) = imax;
+                        __threadfence();
                     }
 
                     if (ava::atomic::fetch_add(&d_touched_v(parent-n_v), 1U)) {

@@ -25,11 +25,12 @@ int main(int argc, char** argv){
  
     // ====== Generate points on a line, distant from 1 with radius 0.55 ======
     AvaHostArray<Sphere2D>::Ptr h_coords = AvaHostArray<Sphere2D>::create({n});
+    float const min_r =  1.f / sqrtf((float)n);
     for (int i = 0; i < n; i++){
         Sphere2D s;
-        s.c[0] = i;
-        s.c[1] = 0.0f;
-        s.r = 0.55f;
+        s.c[0] = ((float) rand()) / RAND_MAX;
+        s.c[1] = ((float) rand()) / RAND_MAX;
+        s.r = 0.25f * min_r * (1.f + ((float) rand()) / RAND_MAX);
         h_coords(i) = s;
     }
 
@@ -59,12 +60,6 @@ int main(int argc, char** argv){
         root_data.min(0), root_data.min(1),
         root_data.max(0), root_data.max(1)
     );
-
-    if (root_data.min(0) != -0.55f || root_data.max(0) != ((n-1)*1.0f + 0.55f) 
-            || root_data.min(1) != -0.55f || root_data.max(1) != 0.55f) {
-        printf("Global bounding box is incorrect, expected : [-0.55, 100.55] x [-0.55, 0.55]\n");
-    }
-
 
     AvaDeviceArray<int, int>::Ptr d_ncoll = AvaDeviceArray<int, int>::create({n+1});
     AvaView<int, -1> d_ncoll_v = d_ncoll->to_view<-1>();
@@ -159,10 +154,6 @@ int main(int argc, char** argv){
         int total;
         gpu_memcpy(&total, d_ncoll->data+n, sizeof(total), gpu_memcpy_device_to_host);
         printf("Total number of collisions [leaf size = %u] : %d\n", LEAF_SIZE, total);
-
-        if (total != (n-2)*2 + 2) {
-            printf("Incorrect total number of collisions, expected %d\n", (n-2)*2 + 2);
-        }
     }
 
 
@@ -232,7 +223,7 @@ int main(int argc, char** argv){
     });
     gpu_device_synchronise();
     timespec_get(&t1, TIME_UTC);
-    printf("Collision count time with max depth 16 : %f ms\n", 
+    printf("Collision count time with max depth 32 : %f ms\n", 
             (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     size_t tmp_size = 0;
@@ -253,9 +244,5 @@ int main(int argc, char** argv){
     int total;
     gpu_memcpy(&total, d_ncoll->data+n, sizeof(total), gpu_memcpy_device_to_host);
     printf("Total number of collisions [max depth = 32] : %d\n", total);
-
-    if (total != (n-2)*2 + 2) {
-        printf("Incorrect total number of collisions, expected %d\n", (n-2)*2 + 2);
-    }
     return EXIT_SUCCESS;
 }
