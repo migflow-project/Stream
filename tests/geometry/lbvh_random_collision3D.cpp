@@ -1,3 +1,6 @@
+/*
+ * Test LBVH from [Karras, 2012] on random spheres in 3D
+ */
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -24,21 +27,22 @@ int main(int argc, char** argv){
     }
  
     // ====== Generate points on a line, distant from 1 with radius 0.55 ======
-    AvaHostArray<Sphere2D>::Ptr h_coords = AvaHostArray<Sphere2D>::create({n});
-    float const min_r =  1.f / sqrtf((float)n);
+    AvaHostArray<Sphere3D>::Ptr h_coords = AvaHostArray<Sphere3D>::create({n});
+    float const min_r =  1.f / std::pow((float)n, 1.0f/3.0f);
     for (int i = 0; i < n; i++){
-        Sphere2D s;
+        Sphere3D s;
         s.c[0] = ((float) rand()) / RAND_MAX;
         s.c[1] = ((float) rand()) / RAND_MAX;
+        s.c[2] = ((float) rand()) / RAND_MAX;
         s.r = 0.25f * min_r * (1.f + ((float) rand()) / RAND_MAX);
         h_coords(i) = s;
     }
 
-    AvaDeviceArray<Sphere2D, int>::Ptr d_coords = AvaDeviceArray<Sphere2D, int>::create({n});
+    AvaDeviceArray<Sphere3D, int>::Ptr d_coords = AvaDeviceArray<Sphere3D, int>::create({n});
     d_coords->set(h_coords);
 
     // Construct lbvh
-    Sphere2DLBVH lbvh;
+    Sphere3DLBVH lbvh;
     lbvh.set_objects(d_coords);
     struct timespec t0, t1;
     gpu_device_synchronise();
@@ -49,13 +53,13 @@ int main(int argc, char** argv){
     printf("Construction time : %f ms\n", 
             (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
-    BBox2f root_data;
-    gpu_memcpy(&root_data, lbvh.d_internal_data->data, sizeof(BBox2f), gpu_memcpy_device_to_host);
+    BBox3f root_data;
+    gpu_memcpy(&root_data, lbvh.d_internal_data->data, sizeof(BBox3f), gpu_memcpy_device_to_host);
 
     printf(
         "Total bb : (%.5f, %.5f) -- (%.5f, %.5f)\n",
-        root_data.min(0), root_data.min(1),
-        root_data.max(0), root_data.max(1)
+        root_data.min(0), root_data.min(1), root_data.min(2),
+        root_data.max(0), root_data.max(1), root_data.max(2)
     );
 
     AvaDeviceArray<int, int>::Ptr d_ncoll = AvaDeviceArray<int, int>::create({n+1});
@@ -64,12 +68,12 @@ int main(int argc, char** argv){
     gpu_device_synchronise();
     timespec_get(&t0, TIME_UTC);
 
-    AvaView<Sphere2D, -1> d_obj_m_v = lbvh.d_obj_m->to_view<-1>();
+    AvaView<Sphere3D, -1> d_obj_m_v = lbvh.d_obj_m->to_view<-1>();
     AvaView<int, -1> d_internal_sep_v = lbvh.d_internal_sep->to_view<-1>();
     AvaView<uint32_t, -1> d_leaf_parent_v = lbvh.d_leaf_parent->to_view<-1>();
     AvaView<uint32_t, -1> d_internal_parent_v = lbvh.d_internal_parent->to_view<-1>();
     AvaView<uint8_t, -1> d_child_is_leaf_v = lbvh.d_child_is_leaf->to_view<-1>();
-    AvaView<BBox2f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
+    AvaView<BBox3f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
 
     ava_for<256>(nullptr, 0, n, [=] __device__ (int const tid) {
         // Stack for DFS on the tree
@@ -78,7 +82,7 @@ int main(int argc, char** argv){
         stack[stack_size++] = 0;
 
         int ncoll_loc = 0;
-        Sphere2D const query = d_obj_m_v(tid);
+        Sphere3D const query = d_obj_m_v(tid);
 
         // DFS
         while (stack_size != 0) {
@@ -89,16 +93,16 @@ int main(int argc, char** argv){
             for (int ichild = 0; ichild < 2; ichild++){
                 // Child is an internal node
                 if (!(child_is_leaf & (ichild+1))) { 
-                    BBox2f const node_data = d_internal_data_v(internal_sep+ichild);
+                    BBox3f const node_data = d_internal_data_v(internal_sep+ichild);
                     bool is_in = true;
-                    for (int i = 0; i < 2; i++){
+                    for (int i = 0; i < 3; i++){
                         is_in &= query.c[i] - query.r < node_data.max(i);
                         is_in &= query.c[i] + query.r > node_data.min(i);
                     }
                     if (is_in) stack[stack_size++] = internal_sep+ichild;
 
                 } else {  // The child is a leaf : compute
-                    const Sphere2D obj = d_obj_m_v(internal_sep+ichild);
+                    const Sphere3D obj = d_obj_m_v(internal_sep+ichild);
                     float const rad_sum = query.r + obj.r;
                     float const d2 = (query.c - obj.c).sqnorm();
                     if (d2 <= rad_sum*rad_sum && (tid != internal_sep+ichild)) ncoll_loc++;

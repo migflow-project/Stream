@@ -26,6 +26,8 @@ extern "C" {
     typedef stream::geo::LBVHa<Sphere2D, stream::geo::ComputeBB_Functor<Sphere2D>, 2> Sphere2DLBVHa;
     typedef stream::geo::LBVHa<Edge2D, stream::geo::ComputeBB_Functor<Edge2D>, 2> Edge2DLBVHa;
     typedef stream::geo::LBVHa<Tri2D, stream::geo::ComputeBB_Functor<Tri2D>, 2> Tri2DLBVHa;
+
+    typedef stream::geo::LBVHa<Sphere3D, stream::geo::ComputeBB_Functor<Sphere3D>, 3> Sphere3DLBVHa;
     
 #ifdef __cplusplus
 }
@@ -59,6 +61,7 @@ namespace stream::geo {
         AvaDeviceArray<uint32_t, int>::Ptr d_child_right;  // ID of right child
         AvaDeviceArray<uint32_t, int>::Ptr d_range_min;    // starting index of the range of leaves in the subtree of i-th internal node
         AvaDeviceArray<uint32_t, int>::Ptr d_range_max;    // last index of the range of leaves in the subtree of i-th internal node
+        AvaDeviceArray<uint64_t, int>::Ptr d_delta;  // Delta function
 
         typename AvaDeviceArray<DataT, int>::Ptr d_internal_data;  // Data stored on each internal node
                                   
@@ -88,6 +91,7 @@ namespace stream::geo {
             d_child_right = AvaDeviceArray<uint32_t, int>::create({0});
             d_range_min = AvaDeviceArray<uint32_t, int>::create({0});
             d_range_max = AvaDeviceArray<uint32_t, int>::create({0});
+            d_delta = AvaDeviceArray<uint64_t, int>::create({0});
 
             d_internal_data = AvaDeviceArray<DataT, int>::create({0});
             d_obj_m = AvaDeviceArray<ObjT, int>::create({0});
@@ -110,6 +114,7 @@ namespace stream::geo {
             d_child_right = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
             d_range_min = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
             d_range_max = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
+            d_delta = AvaDeviceArray<uint64_t, int>::create({(int) (n-1)});
 
             d_internal_data = AvaDeviceArray<DataT, int>::create({(int) (2*n-1)});
             d_obj_m = AvaDeviceArray<ObjT, int>::create({(int) n});
@@ -219,10 +224,11 @@ namespace stream::geo {
             AvaView<ObjT, -1>     d_obj_v        = d_obj->template to_view<-1>();
             AvaView<ObjT, -1>     d_obj_m_v      = d_obj_m->template to_view<-1>();
             AvaView<uint32_t, -1> d_map_sorted_v = d_map_sorted->to_view<-1>();
-            AvaView<DataT, -1>    d_internal_data_v   = d_internal_data->template to_view<-1>();
-            AvaView<uint32_t, -1> d_range_min_v       = d_range_min->to_view<-1>();
-            AvaView<uint32_t, -1> d_range_max_v       = d_range_max->to_view<-1>();
-            ava_for<AVA_BLOCK_SIZE>(0, 0, n, [=] __device__ (size_t const tid) {
+            AvaView<uint64_t, -1> d_delta_v      = d_delta->to_view<-1>();
+            AvaView<uint64_t, -1> d_morton_sorted_v = d_morton_sorted->to_view<-1>();
+            AvaView<DataT, -1>    d_internal_data_v = d_internal_data->template to_view<-1>();
+            uint32_t const n_v = n;
+            ava_for<AVA_BLOCK_SIZE>(0, 0, n_v, [=] __device__ (size_t const tid) {
                 d_obj_m_v(tid) = d_obj_v(d_map_sorted_v(tid));
 
                 // At the same time, init the leaf nodes
@@ -230,21 +236,23 @@ namespace stream::geo {
                 ObjT p = d_obj_m_v(tid);
                 DataComputeT data = functor.init(p);
                 d_internal_data_v(tid) = data;
+
+                // And compute the deltas
+                if (tid < n_v-1) d_delta_v(tid) = d_morton_sorted_v(tid) ^ d_morton_sorted_v(tid+1);
             });
         }
 
         // Build the hierachy of the LBVH
         void _build_hierarchy() {
-            AvaView<uint64_t, -1> d_morton_sorted_v   = d_morton_sorted->to_view<-1>();
-            AvaView<DataT, -1>    d_internal_data_v   = d_internal_data->template to_view<-1>();
-            AvaView<ObjT, -1>     d_obj_m_v           = d_obj_m->template to_view<-1>();
-            AvaView<uint32_t, -1> d_touched_v         = d_touched->to_view<-1>();
-            AvaView<uint32_t, -1> d_parent_v          = d_parent->to_view<-1>();
-            AvaView<uint32_t, -1> d_range_min_v       = d_range_min->to_view<-1>();
-            AvaView<uint32_t, -1> d_range_max_v       = d_range_max->to_view<-1>();
-            AvaView<uint32_t, -1> d_child_left_v      = d_child_left->to_view<-1>();
-            AvaView<uint32_t, -1> d_child_right_v     = d_child_right->to_view<-1>();
-            AvaView<uint32_t, -1> d_root_v            = d_root->to_view<-1>();
+            AvaView<uint64_t, -1> d_delta_v         = d_delta->to_view<-1>();
+            AvaView<DataT, -1>    d_internal_data_v = d_internal_data->template to_view<-1>();
+            AvaView<uint32_t, -1> d_touched_v       = d_touched->to_view<-1>();
+            AvaView<uint32_t, -1> d_parent_v        = d_parent->to_view<-1>();
+            AvaView<uint32_t, -1> d_range_min_v     = d_range_min->to_view<-1>();
+            AvaView<uint32_t, -1> d_range_max_v     = d_range_max->to_view<-1>();
+            AvaView<uint32_t, -1> d_child_left_v    = d_child_left->to_view<-1>();
+            AvaView<uint32_t, -1> d_child_right_v   = d_child_right->to_view<-1>();
+            AvaView<uint32_t, -1> d_root_v          = d_root->to_view<-1>();
             uint32_t n_v = static_cast<uint32_t>(n);
 
             ava_for<AVA_BLOCK_SIZE>(0, 0, n_v, [=] __device__ (uint32_t const i) {
@@ -263,11 +271,7 @@ namespace stream::geo {
                         break;
                     }
 
-                    // Compute deltas
-                    uint64_t const delta_l = d_morton_sorted_v(imin-1) ^ d_morton_sorted_v(imin);
-                    uint64_t const delta_r = d_morton_sorted_v(imax) ^ d_morton_sorted_v(imax+1);
-
-                    bool const right_parent = imin == 0 || (imax != n_v-1 && delta_r < delta_l);
+                    bool const right_parent = imin == 0 || (imax != n_v-1 && d_delta_v(imax) < d_delta_v(imin-1));
                     if (right_parent) {
                         // Attach node to right parent
                         parent = imax + n_v;
@@ -293,7 +297,6 @@ namespace stream::geo {
 
                         functor.combine(data, sibling_data);
                         d_internal_data_v(parent) = data;
-                        __threadfence();
 
                         idx = parent;
                         if (right_parent) imax = d_range_max_v(parent-n_v);

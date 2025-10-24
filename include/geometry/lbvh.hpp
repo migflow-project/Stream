@@ -26,6 +26,7 @@ extern "C" {
     typedef stream::geo::LBVH<Edge2D, stream::geo::ComputeBB_Functor<Edge2D>, 2> Edge2DLBVH;
     typedef stream::geo::LBVH<Tri2D, stream::geo::ComputeBB_Functor<Tri2D>, 2> Tri2DLBVH;
     
+    typedef stream::geo::LBVH<Sphere3D, stream::geo::ComputeBB_Functor<Sphere3D>, 3> Sphere3DLBVH;
 #ifdef __cplusplus
 }
 #endif

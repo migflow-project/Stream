@@ -1,30 +1,17 @@
-add_executable(test_vec test_vec.cpp)
-target_link_libraries(test_vec PRIVATE geometry)
+set(GEOMETRY_TESTS
+    vec                             
+    lbvh_simple_collision            
+    lbvh_random_collision
+    lbvh_random_collision3D
+    lbvh_agglo_simple_collision
+    lbvh_agglo_random_collision
+    lbvh_agglo_random_collision3D
+)
 
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/test_vec.cpp PROPERTIES LANGUAGE CUDA)
-endif()
-
-add_executable(test_lbvh_coll test_lbvh_simple_collision.cpp)
-target_link_libraries(test_lbvh_coll PRIVATE geometry)
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/test_lbvh_simple_collision.cpp PROPERTIES LANGUAGE CUDA)
-endif()
-
-add_executable(test_lbvh_coll_rand test_lbvh_random_collision.cpp)
-target_link_libraries(test_lbvh_coll_rand PRIVATE geometry)
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/test_lbvh_random_collision.cpp PROPERTIES LANGUAGE CUDA)
-endif()
-
-add_executable(test_lbvh_agglo_simple test_lbvh_agglo_simple_collision.cpp)
-target_link_libraries(test_lbvh_agglo_simple PRIVATE geometry)
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/test_lbvh_agglo_simple_collision.cpp PROPERTIES LANGUAGE CUDA)
-endif()
-
-add_executable(test_lbvh_agglo_rand test_lbvh_agglo_random_collision.cpp)
-target_link_libraries(test_lbvh_agglo_rand PRIVATE geometry)
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/test_lbvh_agglo_random_collision.cpp PROPERTIES LANGUAGE CUDA)
-endif()
+foreach(T ${GEOMETRY_TESTS})
+    add_executable(${T} "${T}.cpp")
+    target_link_libraries(${T} PRIVATE geometry)
+    if (ENABLE_CUDA) 
+        set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/${T}.cpp PROPERTIES LANGUAGE CUDA)
+    endif()
+endforeach()
