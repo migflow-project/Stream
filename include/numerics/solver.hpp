@@ -16,6 +16,7 @@
 #include "defines.h"
 #include "linear_system.hpp"
 #include "ava_device_array.h"
+#include "preconditioner.hpp"
 
 namespace stream::numerics {
     struct Solver;
@@ -36,13 +37,13 @@ extern "C" {
 
 namespace stream::numerics {
     struct Solver {
-        virtual ~Solver();
-
         // init the solver for n unknowns
-        virtual void init(uint32_t n);
+        virtual void init(uint32_t n) {};
 
         // Solve the system of equation 
-        virtual void solve(LinearSystem const * const system, AvaDeviceArray<fp_tt, int>::Ptr sol);
+        virtual uint32_t solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr sol) { 
+            return 0;
+        };
     };
 
     struct ConjugateGradient : public Solver {
@@ -50,17 +51,18 @@ namespace stream::numerics {
         AvaDeviceArray<fp_tt, int>::Ptr d_d;       // search direction
         AvaDeviceArray<fp_tt, int>::Ptr d_d1;      // matrix * search direction
         AvaDeviceArray<fp_tt, int>::Ptr d_s;       // preconditioned direction
-        AvaDeviceArray<fp_tt, int>::Ptr d_dots;    // gpu alpha/beta values
+        AvaDeviceArray<fp_tt, int>::Ptr d_dots;    // gpu dot products
         AvaDeviceArray<fp_tt, int>::Ptr d_tmp_dot; // temp memory for dot product
         AvaDeviceArray<fp_tt, int>::Ptr d_temp;    // temp memory 
-        AvaHostArray<fp_tt>::Ptr h_dots;           // cpu alpha/beta values
         size_t temp_size;
 
         ConjugateGradient();
-        ~ConjugateGradient() override;
+        ~ConjugateGradient();
+
+        fp_tt dot_prod(AvaDeviceArray<fp_tt, int>::Ptr d_u, AvaDeviceArray<fp_tt, int>::Ptr d_v) noexcept;
 
         void init(uint32_t n) override;
-        void solve(LinearSystem const * const system, AvaDeviceArray<fp_tt, int>::Ptr sol) override;
+        uint32_t solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr x) override;
     };
 
 } // namespace stream::numerics

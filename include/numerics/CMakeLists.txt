@@ -9,4 +9,5 @@ target_sources(numerics PUBLIC
     FILES ${CMAKE_CURRENT_SOURCE_DIR}/csr.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/linear_system.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/solver.hpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/preconditioner.hpp
 )

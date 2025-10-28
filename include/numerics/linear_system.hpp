@@ -25,21 +25,24 @@ extern "C" {
 
     typedef stream::numerics::LinearSystem  LinSys;
 
+    // Create an empty linear system
+    LinSys* LinSys_create(void);
+
+    // Set the matrix A and independant vector b of the system
+    void LinSys_set(d_CSR const * const A, fp_tt const * const b);
+
+    // Destroy the linear system
+    void LinSys_destroy(LinSys* sys);
+
 #ifdef __cplusplus
 }
 #endif
 
 namespace stream::numerics {
     struct LinearSystem {
-        uint32_t n;  // Size of the system
-                     
-        // CSR Matrix
-        DeviceCSR d_csr;
-
-        // Independant vector
-        AvaDeviceArray<fp_tt, int>::Ptr d_b;  // independant vector n x k
-
-        virtual ~LinearSystem();
+        uint32_t n;      // Size of the system
+        DeviceCSR d_csr; // CSR Matrix
+        AvaDeviceArray<fp_tt, int>::Ptr d_b; // Independant vector
     };
 } // namespace stream::numerics
 
