@@ -1,9 +1,14 @@
-#ifndef __STREAM_LBVH_HPP__
-#define __STREAM_LBVH_HPP__
+#ifndef __STREAM_LBVH_AGGLO_HPP__
+#define __STREAM_LBVH_AGGLO_HPP__
+
+/*
+ *  Implementation of the Linear Bounding Volume Hierarchy (LBVH) from :
+ *     C. Apetrei 2014, Eurographics. 
+ *     "Fast and Simple Agglomerative LBVH construction"
+ */
 
 #include <utility>
 #include "ava_device_array.hpp"
-#include "headers_atomic_cuda.h"
 #include "primitives.hpp"
 #include "vec.hpp"
 #include "ava_reduce.h"
@@ -322,5 +327,5 @@ namespace stream::geo {
 
 } // namespace stream::geo
 
-#endif // __STREAM_LBVH_HPP__
+#endif // __STREAM_LBVH_AGGLO_HPP__
 

@@ -1,6 +1,12 @@
 #ifndef __STREAM_LBVH_HPP__
 #define __STREAM_LBVH_HPP__
 
+/*
+ *  Implementation of the Linear Bounding Volume Hierarchy (LBVH) from :
+ *     T. Karras 2012, Eurographics. 
+ *     "Maximizing Parallelism in the Construction of BVHs, Octrees, and k-d Trees"
+ */
+
 #include <utility>
 #include "ava_device_array.hpp"
 #include "primitives.hpp"
