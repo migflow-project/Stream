@@ -8,9 +8,8 @@ extern "C" {
 LinSys* LinSys_create(void) {
     LinSys* ret = new LinSys;
     ret->n = 0;
-    ret->d_csr = nullptr;
     ret->d_b = AvaDeviceArray<fp_tt, int>::create({0});
-    return new LinSys;
+    return ret;
 }
 
 void LinSys_destroy(LinSys *sys) {
@@ -18,6 +17,7 @@ void LinSys_destroy(LinSys *sys) {
 }
 
 void LinSys_set(LinSys* sys, const d_CSR *const A, const fp_tt *const b){
+    sys->n = A->n;
     sys->d_csr = *A;
     sys->d_b->resize({(int) A->n});
     gpu_memcpy(sys->d_b->data, b, A->n*sizeof(*b), gpu_memcpy_host_to_device);

@@ -22,17 +22,6 @@ namespace stream::numerics {
 
     ConjugateGradient::~ConjugateGradient(){ }
 
-    void ConjugateGradient::init(uint32_t n){
-        d_r->resize({(int) n});
-        d_d->resize({(int) n});
-        d_d1->resize({(int) n});
-        d_s->resize({(int) n});
-        d_tmp_dot->resize({(int) n}); // Temp memory for dot product
-        d_temp->resize({(int) n});    // Temp memory for CUB calls
-        temp_size = n*sizeof(fp_tt);
-    }
-
-
     fp_tt ConjugateGradient::dot_prod(AvaDeviceArray<fp_tt, int>::Ptr d_u, AvaDeviceArray<fp_tt, int>::Ptr d_v) noexcept {
 
         uint32_t n = d_u->size;
@@ -51,6 +40,17 @@ namespace stream::numerics {
     }
 
     uint32_t ConjugateGradient::solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr sol) {
+
+        uint32_t n = sol->size;
+
+        d_r->resize({(int) n});
+        d_d->resize({(int) n});
+        d_d1->resize({(int) n});
+        d_s->resize({(int) n});
+        d_tmp_dot->resize({(int) n}); // Temp memory for dot product
+        d_temp->resize({(int) n});    // Temp memory for CUB calls
+        temp_size = n*sizeof(fp_tt);
+
         AvaView<uint32_t, -1> d_col_v = system->d_csr.d_col->to_view<-1>();
         AvaView<uint32_t, -1> d_row_v = system->d_csr.d_row->to_view<-1>();
         AvaView<fp_tt, -1> d_A_v = system->d_csr.d_val->to_view<-1>();
@@ -60,8 +60,6 @@ namespace stream::numerics {
         AvaView<fp_tt, -1> d_d1_v = d_d1->to_view<-1>();
         AvaView<fp_tt, -1> d_s_v = d_s->to_view<-1>();
         AvaView<fp_tt, -1> d_x_v = sol->to_view<-1>();
-
-        uint32_t n = sol->size;
 
         // Init r = b - Ax0
         ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){
@@ -111,9 +109,31 @@ namespace stream::numerics {
             ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){ 
                 d_d_v(tid) = d_s_v(tid) + beta*d_d_v(tid);
             });
-        } while (std::sqrt(sq_res) > 1e-6f && cg_iter++ < 10000);
+        } while (std::sqrt(sq_res) > 1e-8f && cg_iter++ < 10000);
 
         printf("Residue after %u iterations : %f\n", cg_iter, sq_res);
         return cg_iter;
     }
+} // namespace stream::numerics
+  
+
+extern "C" {
+
+
+SolverCG* SolverCG_create() {
+    return new SolverCG;
 }
+
+void SolverCG_destroy(SolverCG* solver) {
+    delete solver;
+}
+
+uint32_t SolverCG_jacobi_solve(SolverCG * solver, LinSys const * const sys, PrecJacobi_st const * const prec, fp_tt * x) {
+    AvaDeviceArray<fp_tt, int>::Ptr sol = AvaDeviceArray<fp_tt, int>::create({(int) sys->n});
+    gpu_memcpy(sol->data, x, sys->n*sizeof(*x), gpu_memcpy_host_to_device);
+    uint32_t niter = solver->solve(sys, prec, sol);
+    gpu_memcpy(x, sol->data, sys->n*sizeof(*x), gpu_memcpy_device_to_host);
+    return niter;
+}
+
+} // extern C

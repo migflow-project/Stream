@@ -29,7 +29,7 @@ extern "C" {
     LinSys* LinSys_create(void);
 
     // Set the matrix A and independant vector b of the system
-    void LinSys_set(d_CSR const * const A, fp_tt const * const b);
+    void LinSys_set(LinSys * sys, d_CSR const * const A, fp_tt const * const b);
 
     // Destroy the linear system
     void LinSys_destroy(LinSys* sys);

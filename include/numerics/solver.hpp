@@ -31,15 +31,21 @@ extern "C" {
     typedef stream::numerics::Solver Solver_st;
     typedef stream::numerics::ConjugateGradient SolverCG;
 
+    // Create an empty solver
+    SolverCG* SolverCG_create();
+    // Destroy a solver
+    void SolverCG_destroy(SolverCG* solver);
+
+    // Solve a system of equations using Conjugate Gradient with Jacobi preconditioner
+    uint32_t SolverCG_jacobi_solve(SolverCG * solver, LinSys const * const sys, PrecJacobi_st const * const prec, fp_tt * x);
+
 #ifdef __cplusplus
 }
 #endif
 
 namespace stream::numerics {
     struct Solver {
-        // init the solver for n unknowns
-        virtual void init(uint32_t n) {};
-
+        virtual ~Solver() {};
         // Solve the system of equation 
         virtual uint32_t solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr sol) { 
             return 0;
@@ -61,7 +67,6 @@ namespace stream::numerics {
 
         fp_tt dot_prod(AvaDeviceArray<fp_tt, int>::Ptr d_u, AvaDeviceArray<fp_tt, int>::Ptr d_v) noexcept;
 
-        void init(uint32_t n) override;
         uint32_t solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr x) override;
     };
 

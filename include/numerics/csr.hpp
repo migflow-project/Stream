@@ -31,9 +31,6 @@ extern "C" {
     // Create an empty device csr
     d_CSR* d_csr_create();
 
-    // Copy a host csr to a device csr
-    void d_csr_h2d(d_CSR * dcsr, h_CSR const * const hcsr);
-
     // Destroy a device csr
     void d_csr_destroy(d_CSR* A);
 
@@ -47,6 +44,9 @@ extern "C" {
 
     // Destroy a host csr
     void h_csr_destroy(h_CSR* A);
+
+    // Copy a host csr to a device csr
+    void d_csr_h2d(d_CSR * dcsr, h_CSR const * const hcsr);
 
 #ifdef __cplusplus
 }
