@@ -51,7 +51,6 @@ int main(void) {
     prec.init_device(d_csr);
 
     SolverCG cg;
-    cg.init(n);
 
     uint32_t niter = cg.solve(&sys, &prec, d_x);
     gpu_device_synchronise();

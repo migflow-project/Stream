@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.26 FATAL_ERROR)
 
 Project(Stream CXX)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 set(BUILD_SHARED_LIBS ON)
+    
 
 ## Set a default build type if none was specified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -24,19 +27,19 @@ endif()
 
 # ============================= Define options ================================
 
+set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}" CACHE STRING "Library install directory")
+set(PYTHON_BUILD_DIR "${PROJECT_BINARY_DIR}/python" CACHE STRING "Python bindings build directory")
+set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/stream" CACHE STRING "Python bindings install directory")
+
+
 option(ENABLE_TESTS "Compile tests" OFF)
 
 option(ENABLE_CUDA "Compile with CUDA" ON)
 set(ENABLE_CUDA_ARCH "native" CACHE STRING "CUDA architecture")
 
-include(./deps/ava/ava.cmake)
-
 if (ENABLE_CUDA)
     message(STATUS "Stream compile Target : CUDA. Architecture : ${ENABLE_CUDA_ARCH}")
     enable_language(CUDA)
-
-    set(CMAKE_CUDA_FLAGS "--extended-lambda --extra-device-vectorization")
-    set(CMAKE_CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
 
     set(AVA_TARGET "CUDA" CACHE STRING "Compilation target")
     add_compile_definitions(AVA_TARGET_CUDA)
@@ -46,15 +49,32 @@ else()
     add_compile_definitions(AVA_TARGET_CPU)
 endif()
 
+include(./deps/ava/ava.cmake)
+
+if (ENABLE_CUDA)
+    set(CMAKE_CUDA_FLAGS "--extended-lambda --extra-device-vectorization")
+    set(CMAKE_CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
+endif()
 # ============================= Define targets ================================
 
 add_library(geometry SHARED)
 add_library(Stream::geometry ALIAS geometry)
-target_include_directories(geometry PUBLIC "${AVA_INCLUDE_DIRS}")
+foreach(D ${AVA_INCLUDE_DIRS})
+    target_include_directories(geometry 
+        PUBLIC $<BUILD_INTERFACE:${D}>
+               $<INSTALL_INTERFACE:include/ava/>
+    )
+endforeach()
 
 add_library(numerics SHARED)
 add_library(Stream::numerics ALIAS numerics)
-target_include_directories(numerics PUBLIC "${AVA_INCLUDE_DIRS}")
+
+foreach(D ${AVA_INCLUDE_DIRS})
+    target_include_directories(numerics 
+        PUBLIC $<BUILD_INTERFACE:${D}>
+               $<INSTALL_INTERFACE:include/ava/>
+    )
+endforeach()
 
 if (ENABLE_CUDA)
     set_property(TARGET geometry PROPERTY CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
@@ -62,13 +82,59 @@ if (ENABLE_CUDA)
 endif()
 
 # ============================= Add directories ===============================
-
-add_subdirectory(include/)
-add_subdirectory(src/)
+add_subdirectory(include/)       # Library includes and interface
+add_subdirectory(src/)           # Source code
+add_subdirectory(python/)        # Python bindings
 
 if (ENABLE_TESTS)
-    add_subdirectory(tests/)
+    add_subdirectory(tests/)     # Tests
 endif()
+
+# ============================ Install targets ================================
+
+if (TARGET geometry)
+    install(
+        TARGETS geometry
+        EXPORT StreamTargets
+        FILE_SET geometry_public_headers
+    )
+endif()
+
+if (TARGET numerics)
+    install(
+        TARGETS numerics
+        EXPORT StreamTargets
+        FILE_SET numerics_public_headers
+    )
+endif()
+
+install(
+    EXPORT StreamTargets
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Stream
+    NAMESPACE Stream::
+    FILE Stream.cmake # Not sure if this is still needed
+)
+
+configure_package_config_file( 
+    "Config.cmake.in" 
+    "StreamConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Stream
+    PATH_VARS
+    CMAKE_INSTALL_LIBDIR
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/StreamConfigVersion.cmake
+    VERSION 0.0.0
+    COMPATIBILITY SameMajorVersion
+)
+
+### Install Config and ConfigVersion files
+install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/StreamConfig.cmake"
+          "${CMAKE_CURRENT_BINARY_DIR}/StreamConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Stream"
+)
 
 # ========================= Print properties of files =========================
 
@@ -82,3 +148,20 @@ foreach(F ${geometry_SOURCES})
     string(REPLACE ${CMAKE_SOURCE_DIR} "" CLEAN_STRING ${F})
     message("\t ${CLEAN_STRING} : ${PROPS}")
 endforeach()
+
+# List files and properties for build pipeline debug
+function(list_dir_without_cmake_src DIR_LIST)
+    foreach(DIR ${DIR_LIST})
+        string(REPLACE ${CMAKE_SOURCE_DIR} "" CLEAN_STRING ${DIR})
+        message("\t ${CLEAN_STRING}")
+    endforeach()
+endfunction()
+
+get_target_property(geometry_INCLUDE_DIRS geometry INCLUDE_DIRECTORIES )
+message(STATUS "Stream::geometry headers dirs (public + private + interface):")
+list_dir_without_cmake_src("${geometry_INCLUDE_DIRS}")
+
+# ======================= Print install directories ===========================
+
+message(STATUS "Library install directory : ${CMAKE_INSTALL_LIBDIR}")
+message(STATUS "Python bindings install directory : ${PYTHON_INSTALL_DIR}")
