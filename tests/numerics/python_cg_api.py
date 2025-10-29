@@ -1,40 +1,54 @@
 import stream.numerics as stn
 import numpy as np
 import scipy.sparse as sp
-from time import perf_counter
 
-n = 1000   # Size of the matrix
-target_sparsity = 0.01    # Percent of nonzero values in the matrix
+n = 50000   # Size of the matrix
+target_sparsity = 0.001    # Percent of nonzero values in the matrix
 
-# To get the sparsity we want, generate a matrix with entries 
-# taken from a uniform [0, 1] distribution and discard any 
-# entries greater than the target sparsity
-A = np.random.uniform(0, 1, size=(n, n)).astype(np.float32)
-A = A@A.T
+nnz = int(n * (n * target_sparsity))
+nnz_half = nnz // 2   # /2 because we generate the Lower triangulat
+                      # matrix and then symmetrize
 
-# This is to reduce the conditioning number
-A[np.diag_indices(n)] += n/100
+# To get the target sparsity, we generate a COO matrix with nnz/2 random triplets
+r = np.random.randint(0, n, size=(nnz_half,))
+c = np.random.randint(0, n, size=(nnz_half,))
+v = np.random.uniform(0, 1, size=(nnz_half,))
 
-Asp = sp.csr_array(A, dtype=np.float32)
+Acoo = sp.coo_array((v, (r, c)), shape=(n, n), dtype=np.float32)
+Acoo = 0.5 * (Acoo + Acoo.T)                    # Symmetrize
+Acoo[np.diag_indices(n)] += Acoo @ np.ones(n)   # Make diagonally dominant
 
+# Transform to CSR for solve
+Asp = sp.csr_array(Acoo, dtype=np.float32)
+
+# Generate the host CSR matrix
 hcsr = stn.HostCSR(Asp.indptr, Asp.indices, Asp.data)
+# Copy it into device
 dcsr = stn.DeviceCSR(hcsr)
-prec = stn.PrecJacobi(dcsr)
+
+# Create the linear system with a random independant vector 
 b = np.random.uniform(0, 1, size=(n,)).astype(np.float32)
 sys = stn.LinSys(dcsr, b)
 
+# Compute the preconditioner
+prec = stn.PrecJacobi(dcsr)
+
+# Initialize the Conjugate Gradient solver
 cg = stn.SolverCG()
 
+# Solve with our library
 t0 = perf_counter()
 x = np.zeros(n, dtype=np.float32)
 niter = cg.solve_jacobi(sys, prec, x)
 print(f"Time for our solve : {perf_counter() - t0}")
 
+# Solve with scipy
 t0 = perf_counter()
-x_sp = sp.linalg.spsolve(Asp, b)
+x_sp, status = sp.linalg.cg(Asp, b)
 print(f"Time for scipy solve : {perf_counter() - t0}")
 
+# Compare
 allclose = np.allclose(x, x_sp)
 error = np.sqrt(np.sum((x - x_sp)**2))
 
-print(f"Conditioning : {np.linalg.cond(A)}. Mean squared error between scipy and ours : {error}. Allclose : {allclose}")
+print(f"Mean squared error between scipy and ours : {error}. Allclose : {allclose}")

@@ -25,6 +25,10 @@ Optional, but strongly recommended requirements include :
 
 ## Compilation 
 
+The following steps ensure that you download both the source code and its only 
+required dependency (AVA), compile and install them on your system. 
+The installation process also installs the Python API.
+
 ```bash 
 # Clone the repo and its dependencies
 git clone git@git.immc.ucl.ac.be:tihonn/stream.git --recurse-submodules
@@ -39,6 +43,9 @@ cmake .. [additional config options]
 # Compile the code. NOTE : -j is strongly recommended when compiling for GPU
 # as it is much slower than classical CPU compilation
 make -j
+
+# System-wide install of the library 
+sudo make install
 ```
 
 ### Configuration options :
@@ -50,6 +57,56 @@ The configuration options are the following :
 - `-DENABLE_CUDA_ARCH` (default = native) : Compile for a given CUDA architecture.
 
 The usual CMake configuration options such as `-DCMAKE_BUILD_TYPE` are also valid.
+
+## Python bindings 
+
+Once you've installed the library on your system, you can also use the Python bindings 
+in the library `stream`.
+
+Example of simple system solve :
+```python 
+import stream.numerics as stn
+import numpy as np
+import scipy.sparse as sp
+
+n = 50000   # Size of the matrix
+target_sparsity = 0.001    # Percent of nonzero values in the matrix
+
+nnz = int(n * (n * target_sparsity))
+nnz_half = nnz // 2   # /2 because we generate the Lower triangulat
+                      # matrix and then symmetrize
+
+# To get the target sparsity, we generate a COO matrix with nnz/2 random triplets
+r = np.random.randint(0, n, size=(nnz_half,))
+c = np.random.randint(0, n, size=(nnz_half,))
+v = np.random.uniform(0, 1, size=(nnz_half,))
+
+Acoo = sp.coo_array((v, (r, c)), shape=(n, n), dtype=np.float32)
+Acoo = 0.5 * (Acoo + Acoo.T)                    # Symmetrize
+Acoo[np.diag_indices(n)] += Acoo @ np.ones(n)   # Make diagonally dominant
+
+# Transform to CSR for solve
+Asp = sp.csr_array(Acoo, dtype=np.float32)
+
+# Generate the host CSR matrix
+hcsr = stn.HostCSR(Asp.indptr, Asp.indices, Asp.data)
+# Copy it into device
+dcsr = stn.DeviceCSR(hcsr)
+
+# Create the linear system with a random independant vector 
+b = np.random.uniform(0, 1, size=(n,)).astype(np.float32)
+sys = stn.LinSys(dcsr, b)
+
+# Compute the preconditioner
+prec = stn.PrecJacobi(dcsr)
+
+# Initialize the Conjugate Gradient solver
+cg = stn.SolverCG()
+
+# Solve with our library
+x = np.zeros(n, dtype=np.float32)
+niter = cg.solve_jacobi(sys, prec, x)
+```
 
 ## Running Test-cases
 
@@ -75,4 +132,5 @@ The usual CMake configuration options such as `-DCMAKE_BUILD_TYPE` are also vali
    |- numerics/
 |- testcases/              # Physical testcases (e.g. Hysing, Dam break...)
 |- python/                 # Python API 
+   |- numerics/
 ```
