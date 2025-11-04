@@ -98,7 +98,19 @@ namespace stream::numerics {
             fp_tt const alpha = sq_res/dTd1;
             ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){ 
                 d_x_v(tid) += alpha*d_d_v(tid);
-                d_r_v(tid) -= alpha*d_d1_v(tid);
+
+                if ((cg_iter+1) % 50 == 0) {
+                    uint32_t const start = d_row_v(tid);
+                    uint32_t const end = d_row_v(tid+1);
+
+                    fp_tt dot = 0.0f;
+                    for (uint32_t i = start; i < end; i++){
+                        dot += d_A_v(i)*d_x_v(d_col_v(i));
+                    }
+                    d_r_v(tid) = d_b_v(tid) - dot;
+                } else {
+                    d_r_v(tid) -= alpha*d_d1_v(tid);
+                }
             });
             prec->solve(d_s, d_r);
 
@@ -109,7 +121,7 @@ namespace stream::numerics {
             ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){ 
                 d_d_v(tid) = d_s_v(tid) + beta*d_d_v(tid);
             });
-        } while (std::sqrt(sq_res) > 1e-8f && cg_iter++ < 10000);
+        } while (std::sqrt(sq_res) > 1e-6f && cg_iter++ < 10000);
 
         printf("Residue after %u iterations : %f\n", cg_iter, sq_res);
         return cg_iter;
