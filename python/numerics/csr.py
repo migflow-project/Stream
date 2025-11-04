@@ -67,7 +67,10 @@ class DeviceCSR:
         self.dcsr = d_csr_create()
 
         # Move the csr from host to device
-        d_csr_h2d(self.dcsr, host_csr.hcsr)
+        self.set_from_host(host_csr)
 
     def __del__(self):
         d_csr_destroy(self.dcsr)
+
+    def set_from_host(self, host_csr: HostCSR):
+        d_csr_h2d(self.dcsr, host_csr.hcsr)

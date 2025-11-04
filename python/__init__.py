@@ -5,9 +5,8 @@ import pathlib
 # 1. The output directory
 # 2. The install dir
 search_paths = [
-    "@CMAKE_LIBRARY_OUTPUT_DIRECTORY@",
     "@LIB_INSTALL_DIR@",
-    pathlib.Path(__file__).parent.parent / "lib"
+    "/usr/local/lib",
 ]
 
 libdir_path = ""
