@@ -73,7 +73,7 @@ n = 50000   # Size of the matrix
 target_sparsity = 0.001    # Percent of nonzero values in the matrix
 
 nnz = int(n * (n * target_sparsity))
-nnz_half = nnz // 2   # /2 because we generate the Lower triangulat
+nnz_half = nnz // 2   # /2 because we generate the Lower triangular
                       # matrix and then symmetrize
 
 # To get the target sparsity, we generate a COO matrix with nnz/2 random triplets

@@ -232,6 +232,7 @@ namespace stream::geo {
             AvaView<uint64_t, -1> d_delta_v      = d_delta->to_view<-1>();
             AvaView<uint64_t, -1> d_morton_sorted_v = d_morton_sorted->to_view<-1>();
             AvaView<DataT, -1>    d_internal_data_v = d_internal_data->template to_view<-1>();
+            AvaView<uint32_t, -1> d_touched_v       = d_touched->to_view<-1>();
             uint32_t const n_v = n;
             ava_for<AVA_BLOCK_SIZE>(0, 0, n_v, [=] __device__ (size_t const tid) {
                 d_obj_m_v(tid) = d_obj_v(d_map_sorted_v(tid));
@@ -244,6 +245,9 @@ namespace stream::geo {
 
                 // And compute the deltas
                 if (tid < n_v-1) d_delta_v(tid) = d_morton_sorted_v(tid) ^ d_morton_sorted_v(tid+1);
+
+                // And reset the touched flag 
+                d_touched_v(tid) = 0;
             });
         }
 

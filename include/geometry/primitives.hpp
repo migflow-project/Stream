@@ -129,17 +129,17 @@ namespace stream::geo {
         using BBoxT   = BBox<Scalar, dim>;
         using VecT    = Vec<Scalar, dim>;
 
-        IdxType c;
+        IdxType a;
         Scalar r;  // radius
         
         template<typename CoordArray>
         VecT __host__ __device__ inline get_centroid(const CoordArray& coords) const noexcept {
-            return Sphere<Scalar, dim>(coords[c], r).get_centroid();
+            return Sphere<Scalar, dim>(coords[a], r).get_centroid();
         }
 
         template<typename CoordArray>
         BBoxT __host__ __device__ inline get_bbox(const CoordArray& coords) const noexcept {
-            return Sphere<Scalar, dim>(coords[c], r).get_bbox();
+            return Sphere<Scalar, dim>(coords[a], r).get_bbox();
         }
     };
 
@@ -175,17 +175,17 @@ namespace stream::geo {
         using BBoxT  = BBox<Scalar, dim>;
         using VecT   = Vec<Scalar, dim>;
 
-        IdxType s; // source
-        IdxType t; // target
+        IdxType a; // source
+        IdxType b; // target
         
         template<typename CoordArray>
         VecT __host__ __device__ inline get_centroid(const CoordArray& coords) const noexcept {
-            return Edge<Scalar, dim>(coords[s], coords[t]).get_centroid();
+            return Edge<Scalar, dim>(coords[a], coords[b]).get_centroid();
         }
 
         template<typename CoordArray>
         BBoxT __host__ __device__ inline get_bbox(const CoordArray& coords) const noexcept {
-            return Edge<Scalar, dim>(coords[s], coords[t]).get_bbox();
+            return Edge<Scalar, dim>(coords[a], coords[b]).get_bbox();
         };
     };
 
