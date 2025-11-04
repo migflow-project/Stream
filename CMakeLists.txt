@@ -57,29 +57,30 @@ if (ENABLE_CUDA)
 endif()
 # ============================= Define targets ================================
 
-add_library(geometry SHARED)
-add_library(Stream::geometry ALIAS geometry)
-foreach(D ${AVA_INCLUDE_DIRS})
-    target_include_directories(geometry 
-        PUBLIC $<BUILD_INTERFACE:${D}>
-               $<INSTALL_INTERFACE:include/ava/>
-    )
+set(STREAM_MODULES
+    geometry
+    numerics
+    mesh
+)
+
+message(STATUS "Module list : ${STREAM_MODULES}")
+
+foreach(M ${STREAM_MODULES})
+    add_library(${M} SHARED)
+    add_library(Stream::${M} ALIAS ${M})
+    foreach(D ${AVA_INCLUDE_DIRS})
+        target_include_directories(${M} 
+            PUBLIC $<BUILD_INTERFACE:${D}>
+                   $<INSTALL_INTERFACE:include/ava/>
+        )
+    endforeach()
+    if (ENABLE_CUDA)
+        set_property(TARGET ${M} PROPERTY CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
+    endif()
 endforeach()
 
-add_library(numerics SHARED)
-add_library(Stream::numerics ALIAS numerics)
 
-foreach(D ${AVA_INCLUDE_DIRS})
-    target_include_directories(numerics 
-        PUBLIC $<BUILD_INTERFACE:${D}>
-               $<INSTALL_INTERFACE:include/ava/>
-    )
-endforeach()
-
-if (ENABLE_CUDA)
-    set_property(TARGET geometry PROPERTY CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
-    set_property(TARGET numerics PROPERTY CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
-endif()
+target_link_libraries(mesh PUBLIC geometry)
 
 # ============================= Add directories ===============================
 add_subdirectory(include/)       # Library includes and interface
@@ -92,21 +93,15 @@ endif()
 
 # ============================ Install targets ================================
 
-if (TARGET geometry)
-    install(
-        TARGETS geometry
-        EXPORT StreamTargets
-        FILE_SET geometry_public_headers
-    )
-endif()
-
-if (TARGET numerics)
-    install(
-        TARGETS numerics
-        EXPORT StreamTargets
-        FILE_SET numerics_public_headers
-    )
-endif()
+foreach(M ${STREAM_MODULES})
+    if (TARGET ${M})
+        install(
+            TARGETS ${M}
+            EXPORT StreamTargets
+            FILE_SET ${M}_public_headers
+        )
+    endif()
+endforeach()
 
 install(
     EXPORT StreamTargets

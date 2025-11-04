@@ -21,3 +21,15 @@ target_include_directories(numerics
 )
 
 add_subdirectory(numerics/)
+
+target_include_directories(mesh
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/mesh/>
+           $<INSTALL_INTERFACE:include/stream/mesh/>
+)
+
+target_include_directories(mesh
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>
+           $<INSTALL_INTERFACE:include/stream/>
+)
+
+add_subdirectory(mesh/)
