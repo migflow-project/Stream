@@ -160,11 +160,11 @@ namespace stream::mesh {
 
             uint32_t Tlast = n_init_elem;
             uint32_t ti;
+            uint32_t cur_neig_loc = n_inf_nodes;
 
             for (uint32_t ni = 0; ni < insert_end_range-insert_start_range; ni++) {
 
                 // Get local/global indices of neighbor
-                uint32_t cur_neig_loc = ni + n_inf_nodes;
                 uint32_t cur_neig_glob = insert_start_range + ni;
                 if (cur_neig_glob == tid) continue; // Do not insert the node itself
 
@@ -216,6 +216,7 @@ namespace stream::mesh {
                             Tlast++;
                         }
                     }
+                    cur_neig_loc++;
                 } 
             }
 
@@ -282,7 +283,8 @@ namespace stream::mesh {
                     };
 
                     cur_neig_glob = tid;
-                    fp_tt best_distance = FLT_MAX;
+                    fp_tt best_distance = FLT_MAX; // Can change this to get the 
+                                                   // alpha-shape !
 
                     // Get circumsphere
                     VecT const p1 = d_nodes_m_v(tid);
@@ -327,13 +329,19 @@ namespace stream::mesh {
                                 BBoxT const node_data = d_internal_data_v(child_id);
                                 // Check if circumsphere intersects the internal node 
                                 // And that it is closer than the current best distance.
-                                fp_tt const dmaxx = std::fmax(ox - node_data.max(0), 0.0f);
-                                fp_tt const dminx = std::fmax(node_data.min(0) - ox, 0.0f);
-                                fp_tt const dmaxy = std::fmax(oy - node_data.max(1), 0.0f);
-                                fp_tt const dminy = std::fmax(node_data.min(1) - oy, 0.0f);
+                                fp_tt dmaxx = std::fmax(ox - node_data.max(0), 0.0f);
+                                fp_tt dminx = std::fmax(node_data.min(0) - ox, 0.0f);
+                                fp_tt dmaxy = std::fmax(oy - node_data.max(1), 0.0f);
+                                fp_tt dminy = std::fmax(node_data.min(1) - oy, 0.0f);
                                 fp_tt const sqDist = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
+                                
+                                dmaxx = std::fmax(p1[0] - node_data.max(0), 0.0f);
+                                dminx = std::fmax(node_data.min(0) - p1[0], 0.0f);
+                                dmaxy = std::fmax(p1[1] - node_data.max(1), 0.0f);
+                                dminy = std::fmax(node_data.min(1) - p1[1], 0.0f);
+                                fp_tt const sqDistPoint = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
 
-                                if (sqDist < circum_rsqr) {
+                                if (sqDist < circum_rsqr && sqDistPoint < best_distance) {
                                     stack[stack_size++] = child_id;
                                 }
                             } else {  // The child is a leaf : compute
@@ -432,9 +440,9 @@ namespace stream::mesh {
                             Tlast++;
                         }
                     }
+                    cur_neig_loc++;
                 } 
 
-                cur_neig_loc++;
             }
 
             // Suppress infinity triangles and get the number of local elems 
