@@ -187,10 +187,34 @@ namespace stream::geo {
                 uint64_t morton;
                 VecT const c = cMult(d_obj_v(tid).get_centroid() - d_bb_glob_v(0).pmin, mortonFactor);
                 if constexpr (dim == 2) {
-                    morton = stream::geo::encode_magicbits2D(
-                            static_cast<uint32_t>(c[0]), 
-                            static_cast<uint32_t>(c[1])
-                        );
+                    // morton = stream::geo::encode_magicbits2D(
+                    //         static_cast<uint32_t>(c[0]), 
+                    //         static_cast<uint32_t>(c[1])
+                    //     );
+                    fp_tt const x = c[0];
+                    fp_tt const y = c[1];
+
+                    uint32_t ix = static_cast<uint32_t>(x);
+                    uint32_t iy = static_cast<uint32_t>(y);
+
+                    morton = 0;
+
+                    constexpr uint32_t bpd = sizeof(uint32_t) * 8;    // bits per dimension
+                    for (int i = bpd - 1; i >= 0; --i) {
+                        uint64_t s = static_cast<uint64_t>(1) << i;
+                        bool rx = ix & s;
+                        bool ry = iy & s;
+                        morton |= static_cast<uint64_t>((3 * rx) ^ ry) << (i * 2);
+                        if (!ry) {
+                            if (rx) {
+                                ix = ~ix;
+                                iy = ~iy;
+                            }
+                            uint32_t tmp = ix;
+                            ix = iy;
+                            iy = tmp;
+                        }
+                    }
                 } else {
                     morton = stream::geo::encode_magicbits3D(
                             static_cast<uint32_t>(c[0]),
