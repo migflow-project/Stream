@@ -35,6 +35,20 @@ int main(int argc, char** argv) {
     Mesh2D mesh;
     mesh.d_nodes = d_coords;
 
+    printf(
+        "========== Mesh2D Data Type sizes ===========\n"
+        "\t Prim : %zu bytes\n"
+        "\t Elem : %zu bytes\n"
+        "\t LocalElem : %zu bytes\n"
+        "\t VecT : %zu bytes\n"
+        "\t BBoxT : %zu bytes\n",
+        sizeof(Mesh2D::Prim), 
+        sizeof(Mesh2D::Elem),
+        sizeof(Mesh2D::LocalElem),
+        sizeof(Mesh2D::VecT),
+        sizeof(Mesh2D::BBoxT)
+    );
+
     timespec_get(&t0, TIME_UTC);
     mesh.init();
     gpu_device_synchronise();
