@@ -5,6 +5,7 @@
 #include "ava_view.h"
 #include "ava_scan.h"
 #include "defines.h"
+#include "vec.hpp"
 
 template struct stream::mesh::Mesh<2>;
 // template struct stream::mesh::Mesh<3>;
@@ -137,10 +138,6 @@ namespace stream::mesh {
 
         ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
-            // 256-bits bitset to indicate if i-th neighbor is in the cavity
-            // of the inserted point
-            uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
-
             // Get offsets of neighbors and triangles in the blocks
             uint32_t const neig_offset = tloc.get_neig_offset(tid); 
             uint32_t const elem_offset  = tloc.get_elem_offset(tid); 
@@ -170,11 +167,10 @@ namespace stream::mesh {
 
                 tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
 
-                // reset cavity
-                neig_in_cavity[0] = 0;
-                neig_in_cavity[1] = 0;
-                neig_in_cavity[2] = 0;
-                neig_in_cavity[3] = 0;
+
+                // 256-bits bitset to indicate if i-th neighbor is in the cavity
+                // of the inserted point
+                uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
 
                 // Look at every triangle in the triangulation and add it to the 
                 // cavity if the inserted point is inside its circumcircle
@@ -196,8 +192,8 @@ namespace stream::mesh {
                     // triangulation
                     if (det > 0.0f) {
                         // Add T[ti] to the used edges
-                        neig_in_cavity[elem_loc.a >> 6] ^= 1 << (elem_loc.a & 63);
-                        neig_in_cavity[elem_loc.b >> 6] ^= 1 << (elem_loc.b & 63);
+                        neig_in_cavity[elem_loc.a >> 6] ^= 1ULL << (elem_loc.a & 63);
+                        neig_in_cavity[elem_loc.b >> 6] ^= 1ULL << (elem_loc.b & 63);
                         cavity_size++;
 
                         // Remove T[ti] from T
@@ -211,7 +207,7 @@ namespace stream::mesh {
                 if (cavity_size) {
                     // If the cavity is not empty, retriangulate the cavity
                     for (uint8_t r = 0; r < cur_neig_loc; r++){
-                        if (neig_in_cavity[r >> 6] & (1 << (r & 63))) {
+                        if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
                             tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
                             Tlast++;
                         }
@@ -220,11 +216,8 @@ namespace stream::mesh {
                 } 
             }
 
-
-            uint32_t nelem_out_loc = Tlast;
-            uint32_t nelem_loc = Tlast;
-            d_node_nelemloc_v(tid) = nelem_loc;
-            d_node_nelem_out_v(tid+1) = nelem_out_loc;
+            d_node_nelemloc_v(tid) = Tlast;
+            d_node_nelem_out_v(tid+1) = Tlast;
             if (tid == 0) d_node_nelem_out_v(0) = 0;
         });
     }
@@ -250,10 +243,6 @@ namespace stream::mesh {
         AvaView<BBoxT, -1> d_internal_data_v = lbvh.d_internal_data->template to_view<-1>();
 
         ava_for<32>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
-
-            // 256-bits bitset to indicate if i-th neighbor is in the cavity
-            // of the inserted point
-            uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
 
             // Get offsets of neighbors and triangles in the blocks
             uint32_t const neig_offset = tloc.get_neig_offset(tid); 
@@ -283,8 +272,8 @@ namespace stream::mesh {
                     };
 
                     cur_neig_glob = tid;
-                    fp_tt best_distance = FLT_MAX; // Can change this to get the 
-                                                   // alpha-shape !
+                    fp_tt best_distance = limits<fp_tt>::max(); // Can change this to get the 
+                                                                // alpha-shape !
 
                     // Get circumsphere
                     VecT const p1 = d_nodes_m_v(tid);
@@ -393,11 +382,9 @@ namespace stream::mesh {
 
                 tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
 
-                // reset cavity
-                neig_in_cavity[0] = 0;
-                neig_in_cavity[1] = 0;
-                neig_in_cavity[2] = 0;
-                neig_in_cavity[3] = 0;
+                // 256-bits bitset to indicate if i-th neighbor is in the cavity
+                // of the inserted point
+                uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
 
                 // Look at every non-delaunay elemen in the triangulation 
                 // and add it to the cavity if the inserted point is inside 
@@ -420,8 +407,8 @@ namespace stream::mesh {
                     // triangulation
                     if (det > 0.0f) {
                         // Add T[ti] to the used edges
-                        neig_in_cavity[elem_loc.a >> 6] ^= 1 << (elem_loc.a & 63);
-                        neig_in_cavity[elem_loc.b >> 6] ^= 1 << (elem_loc.b & 63);
+                        neig_in_cavity[elem_loc.a >> 6] ^= 1ULL << (elem_loc.a & 63);
+                        neig_in_cavity[elem_loc.b >> 6] ^= 1ULL << (elem_loc.b & 63);
                         cavity_size++;
 
                         // Remove T[ti] from T
@@ -435,7 +422,7 @@ namespace stream::mesh {
                 if (cavity_size) {
                     // If the cavity is not empty, retriangulate the cavity
                     for (uint8_t r = 0; r < cur_neig_loc; r++){
-                        if (neig_in_cavity[r >> 6] & (1 << (r & 63))) {
+                        if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
                             tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
                             Tlast++;
                         }
