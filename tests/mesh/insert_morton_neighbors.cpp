@@ -39,7 +39,7 @@ int main(void) {
     mesh.insert_morton_neighbors();
     mesh.insert_by_circumsphere_checking();
 
-    uint32_t root_id;
+    uint32_t root_id = 0;
     gpu_memcpy(&root_id, mesh.lbvh.d_root->data, sizeof(root_id), gpu_memcpy_device_to_host);
 
     BBox2f root_data;

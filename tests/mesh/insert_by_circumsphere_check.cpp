@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
     timespec_get(&t1, TIME_UTC);
     printf("Circumsphere insertion time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
-    uint32_t root_id;
+    uint32_t root_id = 0;
     gpu_memcpy(&root_id, mesh.lbvh.d_root->data, sizeof(root_id), gpu_memcpy_device_to_host);
 
     BBox2f root_data;
