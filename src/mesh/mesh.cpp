@@ -5,12 +5,15 @@
 #include "ava_view.h"
 #include "ava_scan.h"
 #include "defines.h"
+#include "traversal_stack.hpp"
 #include "vec.hpp"
 
 template struct stream::mesh::Mesh<2>;
 // template struct stream::mesh::Mesh<3>;
 
 namespace stream::mesh {
+
+    using Stack = geo::TraversalStack<uint32_t, fp_tt, 32>;
 
     template<int dim, uint32_t block_size>
     Mesh<dim, block_size>::Mesh() noexcept {
@@ -300,22 +303,24 @@ namespace stream::mesh {
                     // Stack for DFS on the tree
                     uint32_t range_min;
                     uint32_t range_max;
-                    uint32_t stack[64];
-                    uint32_t stack_size = 0;
-                    stack[stack_size++] = d_root_v(0);
+                    Stack stack;
+                    stack.push(d_root_v(0), 0.0f);
 
                     // DFS
-                    while (stack_size != 0) {
-                        uint32_t const cur = stack[--stack_size];
+                    while (stack.len != 0) {
+                        Stack::Pair const pair = stack.pop();
+                        uint32_t const cur = pair.first;
+
                         uint32_t children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
 
                         #pragma unroll 2
                         for (int ichild = 0; ichild < 2; ichild++){
                             uint32_t const child_id = children[ichild];
-                            bool is_leaf = (child_id < n_nodes_v) || (stack_size >= 64);
+                            bool is_leaf = (child_id < n_nodes_v) || (stack.len >= 32);
 
                             if (!is_leaf) {
                                 BBoxT const node_data = d_internal_data_v(child_id);
+
                                 // Check if circumsphere intersects the internal node 
                                 // And that it is closer than the current best distance.
                                 fp_tt dmaxx = std::fmax(ox - node_data.max(0), 0.0f);
@@ -331,7 +336,7 @@ namespace stream::mesh {
                                 fp_tt const sqDistPoint = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
 
                                 if (sqDist < circum_rsqr && sqDistPoint < best_distance) {
-                                    stack[stack_size++] = child_id;
+                                    stack.push(child_id, sqDistPoint);
                                 }
                             } else {  // The child is a leaf : compute
                                 if (child_id >= n_nodes_v) {

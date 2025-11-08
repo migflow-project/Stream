@@ -6,6 +6,7 @@ set(GEOMETRY_TESTS
     lbvh_agglo_simple_collision
     lbvh_agglo_random_collision
     lbvh_agglo_random_collision3D
+    traversal_stack
 )
 
 foreach(T ${GEOMETRY_TESTS})
