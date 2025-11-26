@@ -251,9 +251,7 @@ namespace stream::mesh {
         T pc = nodes(i3);
         T pd = nodes(i4);
 
-        T const ac = pa - pc;
-        T const bc = pb - pc;
-        fp_tt const orientation = ac[0]*bc[1] - ac[1]*bc[0];
+        fp_tt const orientation = orient2d(&pa[0], &pb[0], &pc[0]);
 
         fp_tt errbound;
         fp_tt det = incircle(&pa[0], &pb[0], &pc[0], &pd[0], &errbound);
