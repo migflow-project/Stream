@@ -1,9 +1,11 @@
 #include "mesh/mesh.hpp"
 #include <cfloat>
 #include <cmath>
+#include <ctime>
 #include "ava_device_array.h"
 #include "ava_view.h"
 #include "ava_scan.h"
+#include "ava_select.h"
 #include "defines.h"
 #include "traversal_stack.hpp"
 #include "vec.hpp"
@@ -228,6 +230,8 @@ namespace stream::mesh {
     template<int dim, uint32_t block_size>
     void Mesh<dim, block_size>::insert_by_circumsphere_checking() {
 
+        struct timespec t0, t1;
+
         uint32_t const n_nodes_v = n_nodes;
         uint32_t const cur_max_nelem_v = cur_max_nelem;
         uint32_t const cur_max_nneig_v = cur_max_nneig;
@@ -244,27 +248,44 @@ namespace stream::mesh {
         AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->template to_view<-1>();
         AvaView<BBoxT, -1> d_internal_data_v = lbvh.d_internal_data->template to_view<-1>();
 
-        ava_for<32>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
+        AvaDeviceArray<uint32_t, int>::Ptr d_node_to_insert = AvaDeviceArray<uint32_t, int>::create({(int) n_nodes_v});
+        AvaDeviceArray<uint32_t, int>::Ptr d_unfinished_nodes = AvaDeviceArray<uint32_t, int>::create({(int) n_nodes_v});
+        AvaDeviceArray<uint32_t, int>::Ptr d_non_delaunay_start = AvaDeviceArray<uint32_t, int>::create({(int) n_nodes_v});
+        AvaDeviceArray<uint32_t, int>::Ptr d_num_selected = AvaDeviceArray<uint32_t, int>::create({1});
 
-            // Get offsets of neighbors and triangles in the blocks
-            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
-            uint32_t const elem_offset  = tloc.get_elem_offset(tid); 
-
-            // get the number of local element after morton neighbors insertion
-            uint32_t Tlast = d_node_nelemloc_v(tid); 
-            uint32_t ti;
-            uint32_t cur_neig_loc = n_inf_nodes + n_init_insert;
-            uint32_t cur_neig_glob;
-
-            uint32_t non_delaunay_start_idx = 0;
+        AvaView<uint32_t, -1> d_node_to_insert_v = d_node_to_insert->to_view<-1>();
+        AvaView<uint32_t, -1> d_unfinished_nodes_v = d_unfinished_nodes->to_view<-1>();
+        AvaView<uint32_t, -1> d_non_delaunay_start_v = d_non_delaunay_start->to_view<-1>();
+        ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
+            d_unfinished_nodes_v(tid) = tid;
+            d_non_delaunay_start_v(tid) = 0;
             d_node_is_complete_v(tid) = false;
+        });
 
-            while (Tlast < cur_max_nelem_v && cur_neig_loc < cur_max_nneig_v) {
+        uint32_t insert_iter = 0;
+        uint32_t n_unfinished_nodes = n_nodes_v;
+        while (n_unfinished_nodes && insert_iter < cur_max_nneig_v ) {
+            printf("[%u] Unfinished nodes : %u\n", insert_iter, n_unfinished_nodes);
+            timespec_get(&t0, TIME_UTC);
+
+            // Find a node to insert for each local triangulation
+            ava_for<256>(nullptr, 0, n_unfinished_nodes, [=] __device__ (uint32_t const tid) {
+                uint32_t const node_id = d_unfinished_nodes_v(tid);
+                d_node_is_complete_v(tid) = true;
+
+                // Get offsets of neighbors and triangles in the blocks
+                uint32_t const neig_offset = tloc.get_neig_offset(node_id); 
+                uint32_t const elem_offset  = tloc.get_elem_offset(node_id); 
+
+                // get the number of local element after morton neighbors insertion
+                uint32_t Tlast = d_node_nelemloc_v(node_id); 
+                uint32_t cur_neig_glob;
+
+                uint32_t non_delaunay_start_idx = d_non_delaunay_start_v(node_id);
 
                 // Get the new neighbor by finding a node inside the circumsphere 
                 // of one of the current elements. If no node are found inside 
                 // a given element, it is globally Delaunay.
-                
                 for (uint32_t elem_test = non_delaunay_start_idx; elem_test < Tlast; elem_test++){
                     // Get the element
                     LocalElem elem_loc = tloc.get_elem(elem_offset, elem_test);
@@ -273,12 +294,12 @@ namespace stream::mesh {
                         tloc.get_neig(neig_offset, elem_loc.b),
                     };
 
-                    cur_neig_glob = tid;
+                    cur_neig_glob = node_id;
                     fp_tt best_distance = limits<fp_tt>::max(); // Can change this to get the 
                                                                 // alpha-shape !
 
-                    // Get circumsphere
-                    VecT const p1 = d_nodes_m_v(tid);
+                                                                // Get circumsphere
+                    VecT const p1 = d_nodes_m_v(node_id);
                     VecT const p2 = d_nodes_m_v(neig[0]);
                     VecT const p3 = d_nodes_m_v(neig[1]);
 
@@ -292,8 +313,8 @@ namespace stream::mesh {
 
                     fp_tt const det = ba.cross(ca);
                     fp_tt circum_rsqr = 1.001f*(
-                        ( l1*l2*l3 ) / (4.f*det*det)
-                    );
+                            ( l1*l2*l3 ) / (4.f*det*det)
+                            );
 
                     // Get circumcenter
                     fp_tt ox = p3[0] - 0.5f*(l2*cb[1] - l3*ca[1])/det;
@@ -305,7 +326,6 @@ namespace stream::mesh {
                     Stack stack;
                     stack.push(d_root_v(0), 0.0f);
 
-                    // DFS
                     while (stack.len != 0) {
                         Stack::Pair const pair = stack.pop();
                         uint32_t const cur = pair.first;
@@ -328,7 +348,7 @@ namespace stream::mesh {
                                 fp_tt dminx = std::fmax(node_data.min(0) - ox, 0.0f);
                                 fp_tt dminy = std::fmax(node_data.min(1) - oy, 0.0f);
                                 fp_tt const sqDist = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
-                                
+
                                 dmaxx = std::fmax(p1[0] - node_data.max(0), 0.0f);
                                 dmaxy = std::fmax(p1[1] - node_data.max(1), 0.0f);
                                 dminx = std::fmax(node_data.min(0) - p1[0], 0.0f);
@@ -349,14 +369,14 @@ namespace stream::mesh {
                                 for (uint32_t obj_id = range_min; obj_id <= range_max; obj_id++){
 
                                     // Do not check nodes that are part of the element
-                                    if (obj_id == tid || obj_id == neig[0] || obj_id == neig[1]) continue; 
+                                    if (obj_id == node_id || obj_id == neig[0] || obj_id == neig[1]) continue; 
 
                                     // Check if the node found is closer than the 
                                     // current best guess and that it is inside the 
                                     // circumsphere of the element
                                     VecT const inserted_node = d_nodes_m_v(obj_id);
                                     fp_tt const d2 = (p1 - inserted_node).sqnorm();
-                                    if (d2 < best_distance && incircle_SoS(tid, neig[0], neig[1], obj_id, d_nodes_m_v) > 0.0f){ 
+                                    if (d2 < best_distance && incircle_SoS(node_id, neig[0], neig[1], obj_id, d_nodes_m_v) > 0.0f){ 
                                         cur_neig_glob = obj_id;
                                         best_distance = d2;
                                     }
@@ -365,7 +385,7 @@ namespace stream::mesh {
                         }
                     }
 
-                    if (cur_neig_glob != tid) {
+                    if (cur_neig_glob != node_id) {
                         // If we found a node to insert, break the loop to insert it
                         break;
                     } else {
@@ -378,66 +398,135 @@ namespace stream::mesh {
                     }
                 }
 
+                d_non_delaunay_start_v(node_id) = non_delaunay_start_idx;
+
                 // If we didn't find a node to insert after testing all triangles 
                 // then the triangulation is globally delaunay !
-                if (cur_neig_glob == tid) {
-                    d_node_is_complete_v(tid) = true;
-                    break;
+                if (cur_neig_glob == node_id) {
+                    d_node_is_complete_v(tid) = false;
+                } else {
+                    d_node_to_insert_v(node_id) = cur_neig_glob;
                 }
+            });
 
-                tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
+            gpu_device_synchronise();
+            timespec_get(&t1, TIME_UTC);
+            printf("\tFind: %.5f ms\n", 
+                    (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
 
-                // 256-bits bitset to indicate if i-th neighbor is in the cavity
-                // of the inserted point
-                uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
+            timespec_get(&t0, TIME_UTC);
+            // Finished nodes do not insert anything and thus reduce the 
+            // occupancy of the GPU : Compress the unfinished nodes to increase 
+            // occupance on insertion
+            ava::select::flagged(
+                nullptr,
+                temp_mem_size,
+                d_unfinished_nodes->data,
+                d_node_is_complete->data,
+                d_num_selected->data, 
+                n_unfinished_nodes
+            );
 
-                // Look at every non-delaunay elemen in the triangulation 
-                // and add it to the cavity if the inserted point is inside 
-                // its circumcircle
-                uint32_t cavity_size = 0;
-                ti = non_delaunay_start_idx;
-                while (ti < Tlast) {
-                    // Get local triangle made by tid and two neighbors
-                    LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+            d_temp_mem->resize({temp_mem_size});
 
-                    uint32_t i1 = tid;
-                    uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
-                    uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
-                    uint32_t i4 = cur_neig_glob;
-                    
-                    fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
+            ava::select::flagged(
+                d_temp_mem->data,
+                temp_mem_size,
+                d_unfinished_nodes->data,
+                d_node_is_complete->data,
+                d_num_selected->data, 
+                n_unfinished_nodes
+            );
 
-                    // If the inserted point is in the circumcircle of the triangle, 
-                    // add the triangle's edges to the cavity and remove it from the local 
-                    // triangulation
-                    if (det > 0.0f) {
-                        // Add T[ti] to the used edges
-                        neig_in_cavity[elem_loc.a >> 6] ^= 1ULL << (elem_loc.a & 63);
-                        neig_in_cavity[elem_loc.b >> 6] ^= 1ULL << (elem_loc.b & 63);
-                        cavity_size++;
+            ava::select::flagged(
+                d_temp_mem->data,
+                temp_mem_size,
+                d_node_is_complete->data,
+                d_node_is_complete->data,
+                d_num_selected->data, 
+                n_unfinished_nodes
+            );
 
-                        // Remove T[ti] from T
-                        Tlast--;
-                        tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
-                    } else {
-                        ti++;
-                    }
-                }
+            gpu_device_synchronise();
+            timespec_get(&t1, TIME_UTC);
+            printf("\tCompress: %.5f ms\n", 
+                    (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
 
-                if (cavity_size) {
-                    // If the cavity is not empty, retriangulate the cavity
-                    for (uint8_t r = 0; r < cur_neig_loc; r++){
-                        if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
-                            tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
-                            Tlast++;
+            gpu_memcpy(&n_unfinished_nodes, d_num_selected->data, sizeof(uint32_t), gpu_memcpy_device_to_host);
+
+            timespec_get(&t0, TIME_UTC);
+            // Insert the node
+            ava_for<32>(nullptr, 0, n_unfinished_nodes, [=] __device__ (uint32_t const tid) {
+                    uint32_t const node_id = d_unfinished_nodes_v(tid);
+
+                    // Get offsets of neighbors and triangles in the blocks
+                    uint32_t const neig_offset = tloc.get_neig_offset(node_id); 
+                    uint32_t const elem_offset = tloc.get_elem_offset(node_id); 
+
+                    // get the number of local element after morton neighbors insertion
+                    uint32_t Tlast = d_node_nelemloc_v(node_id); 
+                    uint32_t ti = d_non_delaunay_start_v(node_id);
+                    uint32_t cur_neig_glob = d_node_to_insert_v(node_id);
+                    uint32_t cur_neig_loc = n_inf_nodes + n_init_insert + insert_iter;
+
+                    tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
+
+                    // 256-bits bitset to indicate if i-th neighbor is in the cavity
+                    // of the inserted point
+                    uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
+
+                    // Look at every non-delaunay elemen in the triangulation 
+                    // and add it to the cavity if the inserted point is inside 
+                    // its circumcircle
+                    uint32_t cavity_size = 0;
+                    while (ti < Tlast) {
+                        // Get local triangle made by tid and two neighbors
+                        LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+
+                        uint32_t i1 = node_id;
+                        uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
+                        uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
+                        uint32_t i4 = cur_neig_glob;
+
+                        fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
+
+                        // If the inserted point is in the circumcircle of the triangle, 
+                        // add the triangle's edges to the cavity and remove it from the local 
+                        // triangulation
+                        if (det > 0.0f) {
+                            // Add T[ti] to the used edges
+                            neig_in_cavity[elem_loc.a >> 6] ^= 1ULL << (elem_loc.a & 63);
+                            neig_in_cavity[elem_loc.b >> 6] ^= 1ULL << (elem_loc.b & 63);
+                            cavity_size++;
+
+                            // Remove T[ti] from T
+                            Tlast--;
+                            tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
+                        } else {
+                            ti++;
                         }
                     }
-                    cur_neig_loc++;
-                } 
-            }
 
-            d_node_nelemloc_v(tid) = Tlast;
-        });
+                    if (cavity_size) {
+                        // If the cavity is not empty, retriangulate the cavity
+                        for (uint8_t r = 0; r < cur_neig_loc; r++){
+                            if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
+                                tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
+                                Tlast++;
+                            }
+                        }
+                        cur_neig_loc++;
+                    } 
+
+                    d_node_nelemloc_v(node_id) = Tlast;
+            });
+            gpu_device_synchronise();
+            timespec_get(&t1, TIME_UTC);
+            printf("\tInsert: %.5f ms\n", 
+                    (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
+
+            insert_iter++;
+        }
     }
 
     template<int dim, uint32_t block_size>
