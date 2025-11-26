@@ -61,7 +61,6 @@ namespace stream::mesh {
 
         AvaView<VecT, -1> d_coords_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
-        AvaView<uint32_t, -1> d_node_nelem_out_v = d_node_nelem_out->to_view<-1>();
         BBoxT const * const __restrict__ d_bb_glob = lbvh.d_bb_glob->data;
         TriLoc tloc = get_triloc_struct();
         ava_for<256>(nullptr, 0, n_nodes, [=] __device__ (int const tid) {
@@ -105,8 +104,6 @@ namespace stream::mesh {
             // Initialize local triangulation
             uint32_t const elem_start   = tloc.get_elem_offset(tid); 
             d_node_nelemloc_v(tid) = n_init_elem;
-            d_node_nelem_out_v(tid+1) = n_init_elem;
-            if (tid == 0) d_node_nelem_out_v(0) = 0;
             //  ================ Init cell ===================
 
             if constexpr (dim==2) {
@@ -142,7 +139,6 @@ namespace stream::mesh {
         TriLoc tloc = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
-        AvaView<uint32_t, -1> d_node_nelem_out_v = d_node_nelem_out->to_view<-1>();
 
         ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
@@ -226,8 +222,6 @@ namespace stream::mesh {
             }
 
             d_node_nelemloc_v(tid) = Tlast;
-            d_node_nelem_out_v(tid+1) = Tlast;
-            if (tid == 0) d_node_nelem_out_v(0) = 0;
         });
     }
 
@@ -241,7 +235,6 @@ namespace stream::mesh {
         TriLoc tloc = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
-        AvaView<uint32_t, -1> d_node_nelem_out_v = d_node_nelem_out->to_view<-1>();
         AvaView<uint8_t, -1> d_node_is_complete_v = d_node_is_complete->to_view<-1>();
 
         AvaView<uint32_t, -1> d_root_v = lbvh.d_root->template to_view<-1>();
@@ -441,14 +434,35 @@ namespace stream::mesh {
                     }
                     cur_neig_loc++;
                 } 
-
             }
+
+            d_node_nelemloc_v(tid) = Tlast;
+        });
+    }
+
+    template<int dim, uint32_t block_size>
+    void Mesh<dim, block_size>::remove_super_nodes(void) {
+
+        uint32_t const n_nodes_v = n_nodes;
+
+        TriLoc tloc = get_triloc_struct();
+        AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nelem_out_v = d_node_nelem_out->to_view<-1>();
+
+        ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
+
+            // Get offsets of neighbors and triangles in the blocks
+            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
+            uint32_t const elem_offset  = tloc.get_elem_offset(tid); 
+
+            // get the number of local element after insertion
+            uint32_t Tlast = d_node_nelemloc_v(tid); 
+            uint32_t ti = 0;
 
             // Suppress infinity triangles and get the number of local elems 
             // and outputted global elems
             uint8_t nelem_out_loc = 0;
             uint8_t nelem_loc = 0;
-            ti = 0;
             while (ti < Tlast) {
                 LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
 
@@ -476,7 +490,7 @@ namespace stream::mesh {
 
 
     template<int dim, uint32_t block_size>
-    void Mesh<dim, block_size>::compress_into_global() {
+    void Mesh<dim, block_size>::compress_into_global(void) {
 
         // Perform a partial sum of the nelem_out array, giving the 
         // starting index of the outputted elements for each thread

@@ -55,7 +55,7 @@ int main(void) {
     FILE* fnode = fopen("nodes.txt", "w+");
     AvaHostArray<Vec2f, int>::Ptr h_nodes_m = AvaHostArray<Vec2f, int>::create({mesh.lbvh.d_obj_m->size});
     gpu_memcpy(h_nodes_m->data(), mesh.lbvh.d_obj_m->data, sizeof(Vec2f)*h_nodes_m->size(), gpu_memcpy_device_to_host);
-    for (uint32_t i = 0; i < h_nodes_m->size(); i++) {
+    for (int i = 0; i < h_nodes_m->size(); i++) {
         fprintf(fnode, "%.5f %.5f\n", h_nodes_m(i)[0], h_nodes_m(i)[1]);
     }
     fclose(fnode);
@@ -65,7 +65,7 @@ int main(void) {
     AvaHostArray<Mesh2D::Elem, int>::Ptr h_elem = AvaHostArray<Mesh2D::Elem, int>::create({mesh.d_elemglob->size});
     gpu_memcpy(h_elem->data(), mesh.d_elemglob->data, sizeof(Mesh2D::Elem)*h_elem->size(), gpu_memcpy_device_to_host);
     FILE* ftri = fopen("elem.txt", "w+");
-    for (uint32_t i = 0; i < h_elem->size(); i++){
+    for (int i = 0; i < h_elem->size(); i++){
         Mesh2D::Elem elem = h_elem(i);
         fprintf(ftri, "%u %u %u\n", elem.a, elem.b, elem.c);
     }

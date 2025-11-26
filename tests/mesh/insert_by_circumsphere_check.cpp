@@ -67,6 +67,12 @@ int main(int argc, char** argv) {
     timespec_get(&t1, TIME_UTC);
     printf("Circumsphere insertion time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
+    timespec_get(&t0, TIME_UTC);
+    mesh.remove_super_nodes();
+    gpu_device_synchronise();
+    timespec_get(&t1, TIME_UTC);
+    printf("Remove super node time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
+
     uint32_t root_id = 0;
     gpu_memcpy(&root_id, mesh.lbvh.d_root->data, sizeof(root_id), gpu_memcpy_device_to_host);
 
@@ -83,7 +89,7 @@ int main(int argc, char** argv) {
     FILE* fnode = fopen("nodes.txt", "w+");
     AvaHostArray<Vec2f, int>::Ptr h_nodes_m = AvaHostArray<Vec2f, int>::create({mesh.lbvh.d_obj_m->size});
     gpu_memcpy(h_nodes_m->data(), mesh.lbvh.d_obj_m->data, sizeof(Vec2f)*h_nodes_m->size(), gpu_memcpy_device_to_host);
-    for (uint32_t i = 0; i < h_nodes_m->size(); i++) {
+    for (int i = 0; i < h_nodes_m->size(); i++) {
         fprintf(fnode, "%.5f %.5f\n", h_nodes_m(i)[0], h_nodes_m(i)[1]);
     }
     fclose(fnode);
@@ -93,7 +99,7 @@ int main(int argc, char** argv) {
     AvaHostArray<Mesh2D::Elem, int>::Ptr h_elem = AvaHostArray<Mesh2D::Elem, int>::create({mesh.d_elemglob->size});
     gpu_memcpy(h_elem->data(), mesh.d_elemglob->data, sizeof(Mesh2D::Elem)*h_elem->size(), gpu_memcpy_device_to_host);
     FILE* ftri = fopen("elem.txt", "w+");
-    for (uint32_t i = 0; i < h_elem->size(); i++){
+    for (int i = 0; i < h_elem->size(); i++){
         Mesh2D::Elem elem = h_elem(i);
         fprintf(ftri, "%u %u %u\n", elem.a, elem.b, elem.c);
     }
@@ -102,7 +108,7 @@ int main(int argc, char** argv) {
     AvaHostArray<uint8_t, int>::Ptr h_node_is_complete = AvaHostArray<uint8_t, int>::create({(int) mesh.n_nodes});
     gpu_memcpy(h_node_is_complete->data(), mesh.d_node_is_complete->data, sizeof(uint8_t)*h_node_is_complete->size(), gpu_memcpy_device_to_host);
     FILE* fnode_complete = fopen("node_is_complete.txt", "w+");
-    for (uint32_t i = 0; i < h_node_is_complete->size(); i++){
+    for (int i = 0; i < h_node_is_complete->size(); i++){
         fprintf(fnode_complete, "%u\n", h_node_is_complete(i));
     }
     fclose(fnode_complete);

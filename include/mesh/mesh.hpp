@@ -149,10 +149,12 @@ namespace stream::mesh {
         // - initialize all arrays based on the size of d_nodes
         void init();
 
-        void insert_morton_neighbors();
+        void insert_morton_neighbors(void);
         // void insert_morton_neighbors() requires (dim==3);
         
-        void insert_by_circumsphere_checking();
+        void insert_by_circumsphere_checking(void);
+
+        void remove_super_nodes(void);
         
         // Compute the triangulation
         void compute();
@@ -163,7 +165,7 @@ namespace stream::mesh {
         // Compress the local triangulations that are done.
         // WARNING: Only call this when there are unfinished nodes. If all nodes
         //          have computed their triangulation, call "compress_into_global()"
-        void compress_finished_nodes();
+        void compress_finished_nodes(void);
 
         // Compress the local triangulations into a global one, without 
         // simplex duplication. 
@@ -172,7 +174,7 @@ namespace stream::mesh {
         //          efficiency purposes.
         // This should be used e.g. for outputting triangulation to CPU or 
         // for visualisation purposes.
-        void compress_into_global();
+        void compress_into_global(void);
 
         // Rearrange an array from the initial ordering towards the morton order
         template<typename T>
