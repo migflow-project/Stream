@@ -11,6 +11,8 @@ namespace stream::geo {
     // pop() always returns the item in the stack with the smallest cost
     template<typename IdxT, typename CostT, int size> 
     struct TraversalStack {
+        static constexpr int MaxStackSize = size;
+
         struct Pair {
             IdxT first;
             CostT second;

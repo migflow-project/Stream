@@ -60,6 +60,8 @@ namespace stream::mesh {
         lbvh.d_obj_m->resize({(int) (n_nodes+n_inf_nodes)});
 
         AvaView<VecT, -1> d_coords_m_v = lbvh.d_obj_m->template to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nelem_out_v = d_node_nelem_out->to_view<-1>();
         BBoxT const * const __restrict__ d_bb_glob = lbvh.d_bb_glob->data;
         TriLoc tloc = get_triloc_struct();
         ava_for<256>(nullptr, 0, n_nodes, [=] __device__ (int const tid) {
@@ -102,6 +104,9 @@ namespace stream::mesh {
 
             // Initialize local triangulation
             uint32_t const elem_start   = tloc.get_elem_offset(tid); 
+            d_node_nelemloc_v(tid) = n_init_elem;
+            d_node_nelem_out_v(tid+1) = n_init_elem;
+            if (tid == 0) d_node_nelem_out_v(0) = 0;
             //  ================ Init cell ===================
 
             if constexpr (dim==2) {
@@ -209,6 +214,7 @@ namespace stream::mesh {
 
                 if (cavity_size) {
                     // If the cavity is not empty, retriangulate the cavity
+                    // Special case for 2D : there are only 2 elements in neig_in_cavity
                     for (uint8_t r = 0; r < cur_neig_loc; r++){
                         if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
                             tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
@@ -310,13 +316,14 @@ namespace stream::mesh {
                     while (stack.len != 0) {
                         Stack::Pair const pair = stack.pop();
                         uint32_t const cur = pair.first;
+                        if (pair.second >= best_distance) continue;
 
-                        uint32_t children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
+                        uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
 
                         #pragma unroll 2
                         for (int ichild = 0; ichild < 2; ichild++){
                             uint32_t const child_id = children[ichild];
-                            bool is_leaf = (child_id < n_nodes_v) || (stack.len >= 32);
+                            bool const is_leaf = (child_id < n_nodes_v) || (stack.len >= Stack::MaxStackSize);
 
                             if (!is_leaf) {
                                 BBoxT const node_data = d_internal_data_v(child_id);
@@ -324,14 +331,14 @@ namespace stream::mesh {
                                 // Check if circumsphere intersects the internal node 
                                 // And that it is closer than the current best distance.
                                 fp_tt dmaxx = std::fmax(ox - node_data.max(0), 0.0f);
-                                fp_tt dminx = std::fmax(node_data.min(0) - ox, 0.0f);
                                 fp_tt dmaxy = std::fmax(oy - node_data.max(1), 0.0f);
+                                fp_tt dminx = std::fmax(node_data.min(0) - ox, 0.0f);
                                 fp_tt dminy = std::fmax(node_data.min(1) - oy, 0.0f);
                                 fp_tt const sqDist = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
                                 
                                 dmaxx = std::fmax(p1[0] - node_data.max(0), 0.0f);
-                                dminx = std::fmax(node_data.min(0) - p1[0], 0.0f);
                                 dmaxy = std::fmax(p1[1] - node_data.max(1), 0.0f);
+                                dminx = std::fmax(node_data.min(0) - p1[0], 0.0f);
                                 dminy = std::fmax(node_data.min(1) - p1[1], 0.0f);
                                 fp_tt const sqDistPoint = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
 
