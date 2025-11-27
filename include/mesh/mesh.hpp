@@ -152,7 +152,7 @@ namespace stream::mesh {
         void insert_morton_neighbors(void);
         // void insert_morton_neighbors() requires (dim==3);
         
-        void insert_BVH_neighbors(void);
+        void insert_quadrant_neighbors(void);
         void insert_by_circumsphere_checking(void);
 
         void remove_super_nodes(void);

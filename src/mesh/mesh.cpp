@@ -228,7 +228,7 @@ namespace stream::mesh {
     }
 
     template<int dim, uint32_t block_size>
-    void Mesh<dim, block_size>::insert_BVH_neighbors() {
+    void Mesh<dim, block_size>::insert_quadrant_neighbors() {
 
         uint32_t const n_nodes_v = n_nodes;
 
@@ -244,19 +244,36 @@ namespace stream::mesh {
 
             // Find one point in each quadrant around the node
             VecT const p1 = d_nodes_m_v(tid);
-            uint32_t to_insert[4] = {tid, tid, tid, tid};
-            fp_tt dist[4] = {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX};
+            uint32_t to_insert[8] = {
+                tid, tid, tid, tid,
+                tid, tid, tid, tid
+            };
+            fp_tt dist[8] = {
+                FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX,
+                FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX
+            };
             uint32_t const start = (tid > 32) ? tid - 32 : 0;
             uint32_t const end = (tid + 32 < n_nodes_v) ? tid + 32 : n_nodes_v;
             for (uint32_t i = start; i < end; i++) {
+                if (i == tid) continue;
                 VecT const p2  = d_nodes_m_v(i);
                 fp_tt const d2 = (p1 - p2).sqnorm();
 
                 // Get the quadrant in which p2 is located w.r.t p1
                 uint32_t const id = ((p2[0] > p1[0]) << 1) | (p2[1] > p1[1]);
-                if (d2 < dist[id]) {
-                    to_insert[id] = i;
-                    dist[id] = d2;
+                if (d2 < dist[2*id]) {
+                    to_insert[2*id] = i;
+                    dist[2*id] = d2;
+
+                    if (d2 < dist[2*id+1]) {
+                        uint32_t tmp = to_insert[2*id+1];
+                        to_insert[2*id+1] = i;
+                        to_insert[2*id] = tmp;
+
+                        fp_tt tmp_f = dist[2*id+1];
+                        dist[2*id+1] = d2;
+                        dist[2*id] = tmp_f;
+                    }  
                 }
             }
 
@@ -265,7 +282,7 @@ namespace stream::mesh {
             uint32_t ti;
             uint32_t cur_neig_loc = n_inf_nodes;
 
-            for (uint32_t ni = 0; ni < 4; ni++) {
+            for (uint32_t ni = 0; ni < 8; ni++) {
 
                 // Get local/global indices of neighbor
                 uint32_t cur_neig_glob = to_insert[ni];

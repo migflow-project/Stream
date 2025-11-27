@@ -56,10 +56,12 @@ int main(int argc, char** argv) {
     printf("Init time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     timespec_get(&t0, TIME_UTC);
-    mesh.insert_morton_neighbors();
+    // mesh.insert_morton_neighbors();
+    mesh.insert_quadrant_neighbors();
     gpu_device_synchronise();
     timespec_get(&t1, TIME_UTC);
-    printf("Morton insert time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
+    // printf("Morton neighbors insert time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
+    printf("Quadrant neighbors insert time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     timespec_get(&t0, TIME_UTC);
     mesh.insert_by_circumsphere_checking();
