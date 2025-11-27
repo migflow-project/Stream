@@ -228,6 +228,106 @@ namespace stream::mesh {
     }
 
     template<int dim, uint32_t block_size>
+    void Mesh<dim, block_size>::insert_BVH_neighbors() {
+
+        uint32_t const n_nodes_v = n_nodes;
+
+        TriLoc tloc = get_triloc_struct();
+        AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+
+        ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
+
+            // Get offsets of neighbors and triangles in the blocks
+            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
+            uint32_t const elem_offset  = tloc.get_elem_offset(tid); 
+
+            // Find one point in each quadrant around the node
+            VecT const p1 = d_nodes_m_v(tid);
+            uint32_t to_insert[4] = {tid, tid, tid, tid};
+            fp_tt dist[4] = {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX};
+            uint32_t const start = (tid > 32) ? tid - 32 : 0;
+            uint32_t const end = (tid + 32 < n_nodes_v) ? tid + 32 : n_nodes_v;
+            for (uint32_t i = start; i < end; i++) {
+                VecT const p2  = d_nodes_m_v(i);
+                fp_tt const d2 = (p1 - p2).sqnorm();
+
+                // Get the quadrant in which p2 is located w.r.t p1
+                uint32_t const id = ((p2[0] > p1[0]) << 1) | (p2[1] > p1[1]);
+                if (d2 < dist[id]) {
+                    to_insert[id] = i;
+                    dist[id] = d2;
+                }
+            }
+
+
+            uint32_t Tlast = n_init_elem;
+            uint32_t ti;
+            uint32_t cur_neig_loc = n_inf_nodes;
+
+            for (uint32_t ni = 0; ni < 4; ni++) {
+
+                // Get local/global indices of neighbor
+                uint32_t cur_neig_glob = to_insert[ni];
+                if (cur_neig_glob == tid) continue; // Do not insert the node itself
+
+                tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
+
+
+                // 256-bits bitset to indicate if i-th neighbor is in the cavity
+                // of the inserted point
+                uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
+
+                // Look at every triangle in the triangulation and add it to the 
+                // cavity if the inserted point is inside its circumcircle
+                uint32_t cavity_size = 0;
+                ti = 0;
+                while (ti < Tlast) {
+                    // Get local triangle made by tid and two neighbors
+                    LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+
+                    uint32_t i1 = tid;
+                    uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
+                    uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
+                    uint32_t i4 = cur_neig_glob;
+                    
+                    fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
+
+                    // If the inserted point is in the circumcircle of the triangle, 
+                    // add the triangle's edges to the cavity and remove it from the local 
+                    // triangulation
+                    if (det > 0.0f) {
+                        // Add T[ti] to the used edges
+                        neig_in_cavity[elem_loc.a >> 6] ^= 1ULL << (elem_loc.a & 63);
+                        neig_in_cavity[elem_loc.b >> 6] ^= 1ULL << (elem_loc.b & 63);
+                        cavity_size++;
+
+                        // Remove T[ti] from T
+                        Tlast--;
+                        tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
+                    } else {
+                        ti++;
+                    }
+                }
+
+                if (cavity_size) {
+                    // If the cavity is not empty, retriangulate the cavity
+                    // Special case for 2D : there are only 2 elements in neig_in_cavity
+                    for (uint8_t r = 0; r < cur_neig_loc; r++){
+                        if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
+                            tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
+                            Tlast++;
+                        }
+                    }
+                    cur_neig_loc++;
+                } 
+            }
+
+            d_node_nelemloc_v(tid) = Tlast;
+        });
+    }
+
+    template<int dim, uint32_t block_size>
     void Mesh<dim, block_size>::insert_by_circumsphere_checking() {
 
         struct timespec t0, t1;
@@ -269,7 +369,7 @@ namespace stream::mesh {
             timespec_get(&t0, TIME_UTC);
 
             // Find a node to insert for each local triangulation
-            ava_for<256>(nullptr, 0, n_unfinished_nodes, [=] __device__ (uint32_t const tid) {
+            ava_for<128>(nullptr, 0, n_unfinished_nodes, [=] __device__ (uint32_t const tid) {
                 uint32_t const node_id = d_unfinished_nodes_v(tid);
                 d_node_is_complete_v(tid) = true;
 

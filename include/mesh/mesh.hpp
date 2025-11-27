@@ -147,11 +147,12 @@ namespace stream::mesh {
 
         // - Compute the spatial search structure 
         // - initialize all arrays based on the size of d_nodes
-        void init();
+        void init(void);
 
         void insert_morton_neighbors(void);
         // void insert_morton_neighbors() requires (dim==3);
         
+        void insert_BVH_neighbors(void);
         void insert_by_circumsphere_checking(void);
 
         void remove_super_nodes(void);
