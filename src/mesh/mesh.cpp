@@ -350,7 +350,6 @@ namespace stream::mesh {
         struct timespec t0, t1;
 
         uint32_t const n_nodes_v = n_nodes;
-        uint32_t const cur_max_nelem_v = cur_max_nelem;
         uint32_t const cur_max_nneig_v = cur_max_nneig;
 
         TriLoc tloc = get_triloc_struct();

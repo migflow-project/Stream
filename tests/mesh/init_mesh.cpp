@@ -39,7 +39,7 @@ int main(void) {
     );
 
     printf("==================== All nodes ======================\n");
-    for (uint32_t i = 0; i < mesh.lbvh.d_obj_m->size; i++) {
+    for (int i = 0; i < mesh.lbvh.d_obj_m->size; i++) {
         printf("\tNode %u : (%.5f, %.5f)\n", 
                 i,
                 mesh.lbvh.d_obj_m->data[i][0],
@@ -64,7 +64,7 @@ int main(void) {
     }
 
     printf("=================== Local Triangulations (memory layout) =================\n");
-    for (uint32_t i = 0; i < mesh.d_elemloc->size; i++){
+    for (int i = 0; i < mesh.d_elemloc->size; i++){
         printf("\tblock size : (%u, %u), block col %u. tri %u in local indices (%u, %u)\n", 
                 mesh.cur_max_nelem, 32,
                 i % 32,

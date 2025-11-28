@@ -6,9 +6,8 @@
 This library aims at providing a parallel implementation for all building blocks 
 of the Particle Finite Element Method pipeline :
 
-- Mesh computation
+- Mesh computation and adaptation
 - Free-surface detection
-- Mesh adaptation
 - Assembly of the linear system of equations 
 - Solution of the system
 

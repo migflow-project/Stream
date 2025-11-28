@@ -57,7 +57,7 @@ int main(int argc, char** argv){
     gpu_memcpy(&root_data, lbvh.d_internal_data->data, sizeof(BBox3f), gpu_memcpy_device_to_host);
 
     printf(
-        "Total bb : (%.5f, %.5f) -- (%.5f, %.5f)\n",
+        "Total bb : (%.5f, %.5f, %.5f) -- (%.5f, %.5f, %.5f)\n",
         root_data.min(0), root_data.min(1), root_data.min(2),
         root_data.max(0), root_data.max(1), root_data.max(2)
     );
@@ -70,8 +70,6 @@ int main(int argc, char** argv){
 
     AvaView<Sphere3D, -1> d_obj_m_v = lbvh.d_obj_m->to_view<-1>();
     AvaView<int, -1> d_internal_sep_v = lbvh.d_internal_sep->to_view<-1>();
-    AvaView<uint32_t, -1> d_leaf_parent_v = lbvh.d_leaf_parent->to_view<-1>();
-    AvaView<uint32_t, -1> d_internal_parent_v = lbvh.d_internal_parent->to_view<-1>();
     AvaView<uint8_t, -1> d_child_is_leaf_v = lbvh.d_child_is_leaf->to_view<-1>();
     AvaView<BBox3f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
 

@@ -75,8 +75,6 @@ int main(int argc, char** argv){
 
     AvaView<Sphere2D, -1> d_obj_m_v = lbvh.d_obj_m->to_view<-1>();
     AvaView<int, -1> d_internal_sep_v = lbvh.d_internal_sep->to_view<-1>();
-    AvaView<uint32_t, -1> d_leaf_parent_v = lbvh.d_leaf_parent->to_view<-1>();
-    AvaView<uint32_t, -1> d_internal_parent_v = lbvh.d_internal_parent->to_view<-1>();
     AvaView<uint8_t, -1> d_child_is_leaf_v = lbvh.d_child_is_leaf->to_view<-1>();
     AvaView<BBox2f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
 

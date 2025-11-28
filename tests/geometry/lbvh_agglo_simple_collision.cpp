@@ -86,12 +86,11 @@ int main(int argc, char** argv){
         AvaView<uint32_t, -1> d_child_left_v = lbvh.d_child_left->to_view<-1>();
         AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->to_view<-1>();
         AvaView<uint32_t, -1> d_range_max_v = lbvh.d_range_max->to_view<-1>();
-        AvaView<uint32_t, -1> d_parent_v = lbvh.d_parent->to_view<-1>();
         AvaView<uint32_t, -1> d_root_v = lbvh.d_root->to_view<-1>();
         AvaView<BBox2f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
         uint32_t const n_v = n;
 
-        ava_for<256>(nullptr, 0, n, [=] __device__ (int const tid) {
+        ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid) {
             // Stack for DFS on the tree
             uint32_t range_min;
             uint32_t range_max;
@@ -99,7 +98,7 @@ int main(int argc, char** argv){
             uint32_t stack[64];
             stack[stack_size++] = d_root_v(0);
 
-            int ncoll_loc = 0;
+            uint32_t ncoll_loc = 0;
             Sphere2D const query = d_obj_m_v(tid);
 
             // DFS
@@ -180,12 +179,11 @@ int main(int argc, char** argv){
     AvaView<uint32_t, -1> d_child_left_v = lbvh.d_child_left->to_view<-1>();
     AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->to_view<-1>();
     AvaView<uint32_t, -1> d_range_max_v = lbvh.d_range_max->to_view<-1>();
-    AvaView<uint32_t, -1> d_parent_v = lbvh.d_parent->to_view<-1>();
     AvaView<uint32_t, -1> d_root_v = lbvh.d_root->to_view<-1>();
     AvaView<BBox2f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
     uint32_t const n_v = n;
 
-    ava_for<256>(nullptr, 0, n, [=] __device__ (int const tid) {
+    ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid) {
         // Stack for DFS on the tree
         uint32_t range_min;
         uint32_t range_max;
@@ -193,7 +191,7 @@ int main(int argc, char** argv){
         uint32_t stack[32];
         stack[stack_size++] = d_root_v(0);
 
-        int ncoll_loc = 0;
+        uint32_t ncoll_loc = 0;
         Sphere2D const query = d_obj_m_v(tid);
 
         // DFS

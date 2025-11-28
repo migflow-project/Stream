@@ -53,6 +53,7 @@ int main(void) {
     SolverCG cg;
 
     uint32_t niter = cg.solve(&sys, &prec, d_x);
+    printf("Number of iterations : %u\n", niter);
     gpu_device_synchronise();
     gpu_memcpy(x.data(), d_x->data, n*sizeof(float), gpu_memcpy_device_to_host);
     
