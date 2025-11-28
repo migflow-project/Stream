@@ -22,10 +22,14 @@ solver_cg_destroy.argtypes = [solver_cg_ptr]
 solver_cg_jacobi_solve = libnum.SolverCG_jacobi_solve
 solver_cg_jacobi_solve.restype = ctypes.c_uint32
 solver_cg_jacobi_solve.argtypes = [
-    solver_cg_ptr,                                                             # solver
-    linsys_ptr,                                                                # system
-    prec_jacobi_ptr,                                                           # preconditioner
-    np.ctypeslib.ndpointer(dtype=np.float32, ndim=1, flags=("C", "ALIGNED", "WRITEABLE"))   # val
+    # solver
+    solver_cg_ptr,
+    # system
+    linsys_ptr,
+    # preconditioner
+    prec_jacobi_ptr,
+    np.ctypeslib.ndpointer(dtype=np.float32, ndim=1, flags=(
+        "C", "ALIGNED", "WRITEABLE"))   # val
 ]
 
 
@@ -44,7 +48,11 @@ class SolverCG:
             sys: LinSys,
             prec: PrecJacobi,
             x: npt.NDArray[np.float32]
-            ):
+    ):
+
+        if (type(prec) is not PrecJacobi):
+            raise TypeError(
+                f"SolverCG.solve_jacobi expects a 'PrecJacobi' preconditioner, not a '{type(prec)}'")
 
         sol = np.copy(x).astype(np.float32)
         niter = solver_cg_jacobi_solve(self.solver, sys.sys, prec.prec, sol)
