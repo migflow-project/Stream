@@ -71,5 +71,23 @@ namespace stream::geo {
     __host__ __device__ inline uint32_t encode_magicbits2D_32(uint32_t const x, uint32_t const y) {
         return splitBy2_32(x) | (splitBy2_32(y) << 1);
     };
+
+	// HELPER method for Magicbits decoding
+	__host__ __device__ inline uint32_t groupBy2(uint64_t const m) {
+		uint64_t x = m      & 0x5555555555555555 ;
+		x = (x ^ (x >> 1))  & 0x3333333333333333;
+		x = (x ^ (x >> 2))  & 0x0F0F0F0F0F0F0F0F;
+		x = (x ^ (x >> 4))  & 0x00FF00FF00FF00FF;
+		x = (x ^ (x >> 8))  & 0x0000FFFF0000FFFF;
+		x = (x ^ (x >> 16)) & 0x00000000FFFFFFFF;
+		return static_cast<uint32_t>(x);
+	}
+
+	// DECODE 2D Morton code : Magic bits
+	// This method splits the morton codes bits by using certain patterns (magic bits)
+	__host__ __device__ inline void decode_magicbits2D(const uint64_t m, uint32_t& x, uint32_t& y) {
+		x = groupBy2(m);
+		y = groupBy2(m >> 1);
+	}
 } // namespace stream::geo
 #endif // __STREAM_MORTON_HPP__
