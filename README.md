@@ -53,7 +53,7 @@ The configuration options are the following :
 
 - `-DENABLE_TESTS` (default = OFF) : compile the tests 
 - `-DENABLE_CUDA` (default = ON) : Compile for CUDA architecture. *Requires a CUDA compiler*.
-- `-DENABLE_CUDA_ARCH` (default = native) : Compile for a given CUDA architecture.
+- `-DENABLE_ARCH` (default = native) : Compile for a given architecture (valid for any target compilation).
 
 The usual CMake configuration options such as `-DCMAKE_BUILD_TYPE` are also valid.
 

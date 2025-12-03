@@ -4,11 +4,10 @@ Project(Stream CXX)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
-set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 set(BUILD_SHARED_LIBS ON)
-    
 
 ## Set a default build type if none was specified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -33,18 +32,17 @@ set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/stream" 
 
 
 option(ENABLE_TESTS "Compile tests" OFF)
-
 option(ENABLE_CUDA "Compile with CUDA" ON)
-set(ENABLE_CUDA_ARCH "native" CACHE STRING "CUDA architecture")
+set(ENABLE_ARCH "native" CACHE STRING "Target architecture. E.g. 89 for CUDA compilation or armv8-a for CPU compilation. Default=native")
 
 if (ENABLE_CUDA)
-    message(STATUS "Stream compile Target : CUDA. Architecture : ${ENABLE_CUDA_ARCH}")
+    message(STATUS "Stream compile Target : CUDA. Architecture : ${ENABLE_ARCH}")
     enable_language(CUDA)
 
     set(AVA_TARGET "CUDA" CACHE STRING "Compilation target")
     add_compile_definitions(AVA_TARGET_CUDA)
 else()
-    message(STATUS "Target : CPU")
+    message(STATUS "Stream compile Target : CPU")
     set(AVA_TARGET "CPU" CACHE STRING "Compilation target")
     add_compile_definitions(AVA_TARGET_CPU)
 endif()
@@ -53,7 +51,7 @@ include(./deps/ava/ava.cmake)
 
 if (ENABLE_CUDA)
     set(CMAKE_CUDA_FLAGS "--extended-lambda --extra-device-vectorization")
-    set(CMAKE_CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
+    set(CMAKE_CUDA_ARCHITECTURES ${ENABLE_ARCH})
 endif()
 # ============================= Define targets ================================
 
@@ -75,7 +73,7 @@ foreach(M ${STREAM_MODULES})
         )
     endforeach()
     if (ENABLE_CUDA)
-        set_property(TARGET ${M} PROPERTY CUDA_ARCHITECTURES ${ENABLE_CUDA_ARCH})
+        set_property(TARGET ${M} PROPERTY CUDA_ARCHITECTURES ${ENABLE_ARCH})
     endif()
 endforeach()
 
@@ -98,7 +96,7 @@ foreach(M ${STREAM_MODULES})
         install(
             TARGETS ${M}
             EXPORT StreamTargets
-            FILE_SET ${M}_public_headers
+            FILE_SET ${M}_public_headers 
         )
     endif()
 endforeach()
@@ -160,3 +158,4 @@ list_dir_without_cmake_src("${geometry_INCLUDE_DIRS}")
 
 message(STATUS "Library install directory : ${CMAKE_INSTALL_LIBDIR}")
 message(STATUS "Python bindings install directory : ${PYTHON_INSTALL_DIR}")
+
