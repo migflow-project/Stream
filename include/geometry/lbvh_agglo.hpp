@@ -67,6 +67,7 @@ namespace stream::geo {
         AvaDeviceArray<uint32_t, int>::Ptr d_range_min;    // starting index of the range of leaves in the subtree of i-th internal node
         AvaDeviceArray<uint32_t, int>::Ptr d_range_max;    // last index of the range of leaves in the subtree of i-th internal node
         AvaDeviceArray<uint64_t, int>::Ptr d_delta;  // Delta function
+        AvaDeviceArray<uint32_t, int>::Ptr d_split_idx;  // Index of the split
 
         typename AvaDeviceArray<DataT, int>::Ptr d_internal_data;  // Data stored on each internal node
                                   
@@ -97,10 +98,10 @@ namespace stream::geo {
             d_range_min = AvaDeviceArray<uint32_t, int>::create({0});
             d_range_max = AvaDeviceArray<uint32_t, int>::create({0});
             d_delta = AvaDeviceArray<uint64_t, int>::create({0});
+            d_split_idx = AvaDeviceArray<uint32_t, int>::create({0});
 
             d_internal_data = AvaDeviceArray<DataT, int>::create({0});
             d_obj_m = AvaDeviceArray<ObjT, int>::create({0});
-            // d_obj = objects; // copy pointer
 
             d_touched = AvaDeviceArray<uint32_t, int>::create({0});
             d_parent = AvaDeviceArray<uint32_t, int>::create({0});
@@ -120,6 +121,7 @@ namespace stream::geo {
             d_range_min = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
             d_range_max = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
             d_delta = AvaDeviceArray<uint64_t, int>::create({(int) (n-1)});
+            d_split_idx = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
 
             d_internal_data = AvaDeviceArray<DataT, int>::create({(int) (2*n-1)});
             d_obj_m = AvaDeviceArray<ObjT, int>::create({(int) n});
@@ -187,34 +189,10 @@ namespace stream::geo {
                 uint64_t morton;
                 VecT const c = cMult(d_obj_v(tid).get_centroid() - d_bb_glob_v(0).pmin, mortonFactor);
                 if constexpr (dim == 2) {
-                    // morton = stream::geo::encode_magicbits2D(
-                    //         static_cast<uint32_t>(c[0]), 
-                    //         static_cast<uint32_t>(c[1])
-                    //     );
-                    fp_tt const x = c[0];
-                    fp_tt const y = c[1];
-
-                    uint32_t ix = static_cast<uint32_t>(x);
-                    uint32_t iy = static_cast<uint32_t>(y);
-
-                    morton = 0;
-
-                    constexpr uint32_t bpd = sizeof(uint32_t) * 8;    // bits per dimension
-                    for (int i = bpd - 1; i >= 0; --i) {
-                        uint64_t s = static_cast<uint64_t>(1) << i;
-                        bool rx = ix & s;
-                        bool ry = iy & s;
-                        morton |= static_cast<uint64_t>((3 * rx) ^ ry) << (i * 2);
-                        if (!ry) {
-                            if (rx) {
-                                ix = ~ix;
-                                iy = ~iy;
-                            }
-                            uint32_t tmp = ix;
-                            ix = iy;
-                            iy = tmp;
-                        }
-                    }
+                    morton = stream::geo::encode_magicbits2D(
+                            static_cast<uint32_t>(c[0]), 
+                            static_cast<uint32_t>(c[1])
+                        );
                 } else {
                     morton = stream::geo::encode_magicbits3D(
                             static_cast<uint32_t>(c[0]),
@@ -278,6 +256,7 @@ namespace stream::geo {
         // Build the hierachy of the LBVH
         void _build_hierarchy() {
             AvaView<uint64_t, -1> d_delta_v         = d_delta->to_view<-1>();
+            AvaView<uint32_t, -1> d_split_idx_v     = d_split_idx->to_view<-1>();
             AvaView<DataT, -1>    d_internal_data_v = d_internal_data->template to_view<-1>();
             AvaView<uint32_t, -1> d_touched_v       = d_touched->to_view<-1>();
             AvaView<uint32_t, -1> d_parent_v        = d_parent->to_view<-1>();
@@ -323,13 +302,20 @@ namespace stream::geo {
 
                     if (ava::atomic::fetch_add(&d_touched_v(parent-n_v), 1U)) {
                         uint32_t sibling;
-                        if (right_parent) sibling = d_child_right_v(parent-n_v);
-                        else              sibling = d_child_left_v(parent-n_v);
+                        uint32_t split_idx;
+                        if (right_parent) {
+                            sibling   = d_child_right_v(parent-n_v);
+                            split_idx = imax;
+                        } else {
+                            sibling = d_child_left_v(parent-n_v);
+                            split_idx = imin-1;
+                        }
 
                         DataT sibling_data = d_internal_data_v(sibling);
 
                         functor.combine(data, sibling_data);
                         d_internal_data_v(parent) = data;
+                        d_split_idx_v(parent-n_v) = split_idx;
 
                         idx = parent;
                         if (right_parent) imax = d_range_max_v(parent-n_v);

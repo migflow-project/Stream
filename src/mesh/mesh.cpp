@@ -1,6 +1,6 @@
-#include "mesh/mesh.hpp"
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
 #include <ctime>
 #include "ava_device_array.h"
 #include "ava_view.h"
@@ -9,9 +9,9 @@
 #include "defines.h"
 #include "traversal_stack.hpp"
 #include "vec.hpp"
+#include "mesh.hpp"
 
 template struct stream::mesh::Mesh<2>;
-// template struct stream::mesh::Mesh<3>;
 
 namespace stream::mesh {
 
@@ -32,6 +32,7 @@ namespace stream::mesh {
         d_elemloc = AvaDeviceArray<LocalElem, int>::create({0});
         d_node_is_complete = AvaDeviceArray<uint8_t, int>::create({0});
         d_node_nelemloc = AvaDeviceArray<uint32_t, int>::create({0});
+        d_node_nneigloc = AvaDeviceArray<uint32_t, int>::create({0});
         d_node_nelem_out = AvaDeviceArray<uint32_t, int>::create({0});
         d_elemglob = AvaDeviceArray<Elem, int>::create({0});
         d_neig = AvaDeviceArray<uint32_t, int>::create({0});
@@ -51,6 +52,7 @@ namespace stream::mesh {
         d_elemloc->resize({(int) (n_blocks * block_size * n_init_local_elem)});
         d_node_is_complete->resize({(int) n_nodes});
         d_node_nelemloc->resize({(int) n_nodes});
+        d_node_nneigloc->resize({(int) n_nodes});
         d_node_nelem_out->resize({(int) (n_nodes+1)});
         d_neig->resize({(int) (n_blocks * block_size * cur_max_nneig)});
 
@@ -63,6 +65,7 @@ namespace stream::mesh {
 
         AvaView<VecT, -1> d_coords_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
         BBoxT const * const __restrict__ d_bb_glob = lbvh.d_bb_glob->data;
         TriLoc tloc = get_triloc_struct();
         ava_for<256>(nullptr, 0, n_nodes, [=] __device__ (int const tid) {
@@ -106,6 +109,7 @@ namespace stream::mesh {
             // Initialize local triangulation
             uint32_t const elem_start   = tloc.get_elem_offset(tid); 
             d_node_nelemloc_v(tid) = n_init_elem;
+            d_node_nneigloc_v(tid) = n_inf_nodes;
             //  ================ Init cell ===================
 
             if constexpr (dim==2) {
@@ -141,6 +145,7 @@ namespace stream::mesh {
         TriLoc tloc = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
 
         ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
@@ -161,9 +166,9 @@ namespace stream::mesh {
                 insert_end_range = n_nodes_v;
             }
 
-            uint32_t Tlast = n_init_elem;
             uint32_t ti;
-            uint32_t cur_neig_loc = n_inf_nodes;
+            uint32_t Tlast = d_node_nelemloc_v(tid);
+            uint32_t cur_neig_loc = d_node_nneigloc_v(tid);
 
             for (uint32_t ni = 0; ni < insert_end_range-insert_start_range; ni++) {
 
@@ -172,7 +177,6 @@ namespace stream::mesh {
                 if (cur_neig_glob == tid) continue; // Do not insert the node itself
 
                 tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
-
 
                 // 256-bits bitset to indicate if i-th neighbor is in the cavity
                 // of the inserted point
@@ -224,6 +228,7 @@ namespace stream::mesh {
             }
 
             d_node_nelemloc_v(tid) = Tlast;
+            d_node_nneigloc_v(tid) = cur_neig_loc;
         });
     }
 
@@ -235,6 +240,7 @@ namespace stream::mesh {
         TriLoc tloc = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
 
         ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
@@ -278,9 +284,8 @@ namespace stream::mesh {
             }
 
 
-            uint32_t Tlast = n_init_elem;
-            uint32_t ti;
-            uint32_t cur_neig_loc = n_inf_nodes;
+            uint32_t Tlast = d_node_nelemloc_v(tid);
+            uint32_t cur_neig_loc = d_node_nneigloc_v(tid);
 
             for (uint32_t ni = 0; ni < 8; ni++) {
 
@@ -298,7 +303,7 @@ namespace stream::mesh {
                 // Look at every triangle in the triangulation and add it to the 
                 // cavity if the inserted point is inside its circumcircle
                 uint32_t cavity_size = 0;
-                ti = 0;
+                uint32_t ti = 0;
                 while (ti < Tlast) {
                     // Get local triangle made by tid and two neighbors
                     LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
@@ -341,6 +346,200 @@ namespace stream::mesh {
             }
 
             d_node_nelemloc_v(tid) = Tlast;
+            d_node_nneigloc_v(tid) = cur_neig_loc;
+        });
+    }
+
+    template<int dim, uint32_t block_size>
+    void Mesh<dim, block_size>::insert_BVH_neighbors() {
+        uint32_t const n_nodes_v = n_nodes;
+
+        TriLoc tloc = get_triloc_struct();
+        AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
+
+        AvaView<uint32_t, -1> d_root_v = lbvh.d_root->template to_view<-1>();
+        AvaView<uint32_t, -1> d_split_idx_v = lbvh.d_split_idx->template to_view<-1>();
+        AvaView<uint32_t, -1> d_child_left_v = lbvh.d_child_left->template to_view<-1>();
+        AvaView<uint32_t, -1> d_child_right_v = lbvh.d_child_right->template to_view<-1>();
+        AvaView<uint32_t, -1> d_range_max_v = lbvh.d_range_max->template to_view<-1>();
+        AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->template to_view<-1>();
+        AvaView<uint64_t, -1> d_morton_v = lbvh.d_morton_sorted->template to_view<-1>();
+        AvaView<BBoxT, -1>    d_bb_glob_v = lbvh.d_bb_glob->template to_view<-1>();
+        AvaView<BBoxT, -1>    d_bboxes_v = lbvh.d_internal_data->template to_view<-1>();
+
+        typename AvaDeviceArray<BBoxT, int>::Ptr d_boxes = AvaDeviceArray<BBoxT, int>::create({(int) lbvh.d_internal_data->size});
+        AvaView<BBoxT, -1> d_boxes_v = d_boxes->template to_view<-1>();
+        ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
+            // Fit the bboxes of the nodes
+            BBoxT bb = d_bb_glob_v(0);
+            uint32_t range_min;
+            uint32_t range_max;
+            uint32_t stack[32];
+            uint8_t stack_size = 0;
+            stack[stack_size++] = d_root_v(0);
+
+            while (stack_size != 0) {
+                uint32_t const cur = stack[--stack_size];
+                uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
+
+                // Get the splitting plane of this internal node
+                uint32_t const split_idx = d_split_idx_v(cur-n_nodes_v);
+                uint32_t const split_bit_idx = __builtin_clzll(d_morton_v(split_idx) ^ d_morton_v(split_idx+1));
+                uint32_t const split_axis = (split_bit_idx+(dim-1)) % dim;
+
+                // Get the split coordinate
+                fp_tt const split_coord = 0.5f * (d_bboxes_v(children[0]).pmax[split_axis] + d_bboxes_v(children[1]).pmin[split_axis]);
+
+                #pragma unroll 2
+                for (int ichild = 0; ichild < 2; ichild++){
+                    uint32_t const child_id = children[ichild];
+                    bool const is_leaf = (child_id < n_nodes_v) || (stack_size >= 32);
+
+                    if (!is_leaf) {
+                        if (d_range_min_v(child_id-n_nodes_v) <= tid && d_range_max_v(child_id-n_nodes_v) >= tid) {
+                            if (ichild == 0) {
+                                bb.pmax[split_axis] = split_coord;
+                            } else {
+                                bb.pmin[split_axis] = split_coord;
+                            }
+                            // Store the corresponding bounding box 
+                            d_boxes_v(child_id) = bb;
+
+                            // Recurse if tid is in the subtree
+                            stack[stack_size++] = child_id;
+                        }
+                    } else {  // The child is a leaf : compute
+                        if (child_id >= n_nodes_v) {
+                            range_min = d_range_min_v(child_id-n_nodes_v);
+                            range_max = d_range_max_v(child_id-n_nodes_v);
+                        } else {
+                            range_min = child_id;
+                            range_max = child_id;
+                        }
+                        for (uint32_t obj_id = range_min; obj_id <= range_max; obj_id++){
+                            BBoxT bbfin = bb;
+                            if (ichild == 0) {
+                                bbfin.pmax[split_axis] = split_coord;
+                            } else {
+                                bbfin.pmin[split_axis] = split_coord;
+                            }
+
+                            d_boxes_v(obj_id) = bbfin;
+                        }
+                    }
+                }
+            }
+        });
+
+        ava_for<32>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
+
+            // Get offsets of neighbors and triangles in the blocks
+            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
+            uint32_t const elem_offset = tloc.get_elem_offset(tid); 
+
+            uint32_t Tlast = d_node_nelemloc_v(tid);
+            uint32_t cur_neig_loc = d_node_nneigloc_v(tid);
+
+            BBoxT const bbloc = d_boxes_v(tid);
+
+            uint32_t range_min;
+            uint32_t range_max;
+            uint32_t stack[32];
+            uint8_t stack_size = 0;
+            stack[stack_size++] = d_root_v(0);
+
+            while (stack_size != 0) {
+                uint32_t const cur = stack[--stack_size];
+                uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
+
+                #pragma unroll 2
+                for (int ichild = 0; ichild < 2; ichild++){
+                    uint32_t const child_id = children[ichild];
+                    bool const is_leaf = (child_id < n_nodes_v) || (stack_size >= 32);
+                    BBoxT const bbnode = d_boxes_v(child_id);
+
+                    if (!is_leaf) {
+                        // We admit that the bounding box of the leaf is either 
+                        // inside or touching the bounding box of the internal node
+                        bool is_neighbor = true;
+                        is_neighbor &= !(bbloc.max(0) < bbnode.min(0) || bbloc.min(0) > bbnode.max(0));
+                        is_neighbor &= !(bbloc.max(1) < bbnode.min(1) || bbloc.min(1) > bbnode.max(1));
+
+                        if (is_neighbor) {
+                            stack[stack_size++] = child_id;
+                        }
+                    } else {  // The child is a leaf : compute
+                        if (child_id >= n_nodes_v) {
+                            range_min = d_range_min_v(child_id-n_nodes_v);
+                            range_max = d_range_max_v(child_id-n_nodes_v);
+                        } else {
+                            range_min = child_id;
+                            range_max = child_id;
+                        }
+                        for (uint32_t obj_id = range_min; obj_id <= range_max; obj_id++){
+
+                            // Do not check self
+                            if (obj_id == tid) continue; 
+
+                            // insert node
+                            uint32_t const cur_neig_glob = obj_id;
+                            tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
+
+                            // 256-bits bitset to indicate if i-th neighbor is in the cavity
+                            // of the inserted point
+                            uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
+
+                            // Look at every non-delaunay elemen in the triangulation 
+                            // and add it to the cavity if the inserted point is inside 
+                            // its circumcircle
+                            uint32_t cavity_size = 0;
+                            uint32_t ti = 0;
+                            while (ti < Tlast) {
+                                // Get local triangle made by tid and two neighbors
+                                LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+
+                                uint32_t i1 = tid;
+                                uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
+                                uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
+                                uint32_t i4 = cur_neig_glob;
+
+                                fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
+
+                                // If the inserted point is in the circumcircle of the triangle, 
+                                // add the triangle's edges to the cavity and remove it from the local 
+                                // triangulation
+                                if (det > 0.0f) {
+                                    // Add T[ti] to the used edges
+                                    neig_in_cavity[elem_loc.a >> 6] ^= 1ULL << (elem_loc.a & 63);
+                                    neig_in_cavity[elem_loc.b >> 6] ^= 1ULL << (elem_loc.b & 63);
+                                    cavity_size++;
+
+                                    // Remove T[ti] from T
+                                    Tlast--;
+                                    tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
+                                } else {
+                                    ti++;
+                                }
+                            }
+
+                            if (cavity_size) {
+                                // If the cavity is not empty, retriangulate the cavity
+                                for (uint8_t r = 0; r < cur_neig_loc; r++){
+                                    if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
+                                        tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
+                                        Tlast++;
+                                    }
+                                }
+                                cur_neig_loc++;
+                            } 
+                        }
+                    }
+                }
+            }
+            d_node_nelemloc_v(tid) = Tlast;
+            d_node_nneigloc_v(tid) = cur_neig_loc;
         });
     }
 
@@ -355,6 +554,7 @@ namespace stream::mesh {
         TriLoc tloc = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
+        AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
         AvaView<uint8_t, -1> d_node_is_complete_v = d_node_is_complete->to_view<-1>();
 
         AvaView<uint32_t, -1> d_root_v = lbvh.d_root->template to_view<-1>();
@@ -364,10 +564,15 @@ namespace stream::mesh {
         AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->template to_view<-1>();
         AvaView<BBoxT, -1> d_internal_data_v = lbvh.d_internal_data->template to_view<-1>();
 
+
+        timespec_get(&t0, TIME_UTC);
         AvaDeviceArray<uint32_t, int>::Ptr d_node_to_insert = AvaDeviceArray<uint32_t, int>::create({(int) n_nodes_v});
         AvaDeviceArray<uint32_t, int>::Ptr d_unfinished_nodes = AvaDeviceArray<uint32_t, int>::create({(int) n_nodes_v});
         AvaDeviceArray<uint32_t, int>::Ptr d_non_delaunay_start = AvaDeviceArray<uint32_t, int>::create({(int) n_nodes_v});
         AvaDeviceArray<uint32_t, int>::Ptr d_num_selected = AvaDeviceArray<uint32_t, int>::create({1});
+        timespec_get(&t1, TIME_UTC);
+        printf("\tGPU memory alloc: %.5f ms\n", 
+                (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
 
         AvaView<uint32_t, -1> d_node_to_insert_v = d_node_to_insert->to_view<-1>();
         AvaView<uint32_t, -1> d_unfinished_nodes_v = d_unfinished_nodes->to_view<-1>();
@@ -380,12 +585,11 @@ namespace stream::mesh {
 
         uint32_t insert_iter = 0;
         uint32_t n_unfinished_nodes = n_nodes_v;
-        while (n_unfinished_nodes && insert_iter < cur_max_nneig_v ) {
-            printf("[%u] Unfinished nodes : %u\n", insert_iter, n_unfinished_nodes);
-            timespec_get(&t0, TIME_UTC);
 
+        while (n_unfinished_nodes && insert_iter < cur_max_nneig_v ) {
+            timespec_get(&t0, TIME_UTC);
             // Find a node to insert for each local triangulation
-            ava_for<128>(nullptr, 0, n_unfinished_nodes, [=] __device__ (uint32_t const tid) {
+            ava_for<256>(nullptr, 0, n_unfinished_nodes, [=] __device__ (uint32_t const tid) {
                 uint32_t const node_id = d_unfinished_nodes_v(tid);
                 d_node_is_complete_v(tid) = true;
 
@@ -398,6 +602,7 @@ namespace stream::mesh {
                 uint32_t cur_neig_glob;
 
                 uint32_t non_delaunay_start_idx = d_non_delaunay_start_v(node_id);
+                Stack stack;
 
                 // Get the new neighbor by finding a node inside the circumsphere 
                 // of one of the current elements. If no node are found inside 
@@ -414,7 +619,7 @@ namespace stream::mesh {
                     fp_tt best_distance = limits<fp_tt>::max(); // Can change this to get the 
                                                                 // alpha-shape !
 
-                                                                // Get circumsphere
+                    // Get circumsphere
                     VecT const p1 = d_nodes_m_v(node_id);
                     VecT const p2 = d_nodes_m_v(neig[0]);
                     VecT const p3 = d_nodes_m_v(neig[1]);
@@ -439,7 +644,6 @@ namespace stream::mesh {
                     // Stack for DFS on the tree
                     uint32_t range_min;
                     uint32_t range_max;
-                    Stack stack;
                     stack.push(d_root_v(0), 0.0f);
 
                     while (stack.len != 0) {
@@ -530,6 +734,7 @@ namespace stream::mesh {
             printf("\tFind: %.5f ms\n", 
                     (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
 
+
             timespec_get(&t0, TIME_UTC);
             // Finished nodes do not insert anything and thus reduce the 
             // occupancy of the GPU : Compress the unfinished nodes to increase 
@@ -562,13 +767,14 @@ namespace stream::mesh {
                 d_num_selected->data, 
                 n_unfinished_nodes
             );
+            gpu_memcpy(&n_unfinished_nodes, d_num_selected->data, sizeof(uint32_t), gpu_memcpy_device_to_host);
 
             gpu_device_synchronise();
             timespec_get(&t1, TIME_UTC);
             printf("\tCompress: %.5f ms\n", 
                     (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
 
-            gpu_memcpy(&n_unfinished_nodes, d_num_selected->data, sizeof(uint32_t), gpu_memcpy_device_to_host);
+            printf("[%u] Unfinished nodes : %u\n", insert_iter, n_unfinished_nodes);
 
             timespec_get(&t0, TIME_UTC);
             // Insert the node
@@ -583,7 +789,7 @@ namespace stream::mesh {
                     uint32_t Tlast = d_node_nelemloc_v(node_id); 
                     uint32_t ti = d_non_delaunay_start_v(node_id);
                     uint32_t cur_neig_glob = d_node_to_insert_v(node_id);
-                    uint32_t cur_neig_loc = n_inf_nodes + n_init_insert + insert_iter;
+                    uint32_t cur_neig_loc = d_node_nneigloc_v(node_id);
 
                     tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
 
@@ -635,11 +841,13 @@ namespace stream::mesh {
                     } 
 
                     d_node_nelemloc_v(node_id) = Tlast;
+                    d_node_nneigloc_v(node_id) = cur_neig_loc;
             });
             gpu_device_synchronise();
             timespec_get(&t1, TIME_UTC);
             printf("\tInsert: %.5f ms\n", 
                     (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
+
 
             insert_iter++;
         }

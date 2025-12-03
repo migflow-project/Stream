@@ -2,6 +2,7 @@ set(MESH_TESTS
     init_mesh
     insert_morton_neighbors
     insert_by_circumsphere_check
+    insert_bvh_neighbors
 )
 
 foreach(T ${MESH_TESTS})

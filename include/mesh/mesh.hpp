@@ -58,15 +58,15 @@ namespace stream::mesh {
     template<int dim, uint32_t block_size>
     struct Mesh {
         // Raw primitive
-        using Prim = std::conditional_t<dim==2, geo::Tri<fp_tt, 2>, geo::Tet<fp_tt, 3>>;   
+        using Prim = typename std::conditional<dim==2, geo::Tri<fp_tt, 2>, geo::Tet<fp_tt, 3>>::type;   
         // Globally indexed primitive
-        using Elem = std::conditional_t<dim==2, geo::TriElem<fp_tt, 2, uint32_t>, geo::TetElem<fp_tt, 3, uint32_t>>;   
+        using Elem = typename std::conditional<dim==2, geo::TriElem<fp_tt, 2, uint32_t>, geo::TetElem<fp_tt, 3, uint32_t>>::type;   
         // Locally indexed primitive for first computation phase (assume < 256 neighbors)
-        using LocalElem = std::conditional_t<dim==2, geo::EdgeElem<fp_tt, 2, uint8_t>, geo::TriElem<fp_tt, 3, uint8_t>>;   
+        using LocalElem = typename std::conditional<dim==2, geo::EdgeElem<fp_tt, 2, uint8_t>, geo::TriElem<fp_tt, 3, uint8_t>>::type;   
         // Locally indexed primitive for recovery phase (assume < MAX_UINT32 neigbors)
-        using RecoveryLocalElem = std::conditional_t<dim==2, geo::EdgeElem<fp_tt, 2, uint32_t>, geo::TriElem<fp_tt, 3, uint32_t>>;   
-        using VecT = geo::Vec<fp_tt, dim>;   // 2d/3d vector type
-        using BBoxT = geo::BBox<fp_tt, dim>; // 2d/3d bbox type
+        using RecoveryLocalElem = typename std::conditional<dim==2, geo::EdgeElem<fp_tt, 2, uint32_t>, geo::TriElem<fp_tt, 3, uint32_t>>::type;   
+        using VecT = typename geo::Vec<fp_tt, dim>;   // 2d/3d vector type
+        using BBoxT = typename geo::BBox<fp_tt, dim>; // 2d/3d bbox type
 
         // CONSTANT : cannot be modified
         // Number of infinity nodes and initial simplices in the triangulation.
@@ -127,6 +127,9 @@ namespace stream::mesh {
         // Number of local simplices in the local triangulation
         AvaDeviceArray<uint32_t, int>::Ptr d_node_nelemloc;
 
+        // Number of local neighbors in the local triangulation
+        AvaDeviceArray<uint32_t, int>::Ptr d_node_nneigloc;
+
         // Number of simplices output by each node (to avoid triangles duplication 
         // in d_triglob)
         AvaDeviceArray<uint32_t, int>::Ptr d_node_nelem_out;
@@ -153,6 +156,7 @@ namespace stream::mesh {
         // void insert_morton_neighbors() requires (dim==3);
         
         void insert_quadrant_neighbors(void);
+        void insert_BVH_neighbors(void);
         void insert_by_circumsphere_checking(void);
 
         void remove_super_nodes(void);
@@ -179,11 +183,11 @@ namespace stream::mesh {
 
         // Rearrange an array from the initial ordering towards the morton order
         template<typename T>
-        void permuteForward(AvaDeviceArray<T, int>::Ptr d_in, AvaDeviceArray<T, int>::Ptr d_out) const;
+        void permuteForward(typename AvaDeviceArray<T, int>::Ptr d_in, typename AvaDeviceArray<T, int>::Ptr d_out) const;
 
         // Rearrange an array from the morton ordering towards the initial order
         template<typename T>
-        void permuteBackward(AvaDeviceArray<T, int>::Ptr d_in, AvaDeviceArray<T, int>::Ptr d_out) const;
+        void permuteBackward(typename AvaDeviceArray<T, int>::Ptr d_in, typename AvaDeviceArray<T, int>::Ptr d_out) const;
 
         // Temporary local triangulation structure to send in the kernels.
         // It allows to avoid sending *this to kernels.
