@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <ctime>
 #include "ava_device_array.h"
+#include "ava_host_array.hpp"
 #include "ava_view.h"
 #include "ava_scan.h"
 #include "ava_select.h"
@@ -376,59 +377,50 @@ namespace stream::mesh {
             BBoxT bb = d_bb_glob_v(0);
             uint32_t range_min;
             uint32_t range_max;
-            uint32_t stack[32];
-            uint8_t stack_size = 0;
-            stack[stack_size++] = d_root_v(0);
 
-            while (stack_size != 0) {
-                uint32_t const cur = stack[--stack_size];
-                uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
-
+            uint32_t cur = d_root_v(0);
+            bool leaf_reached = false;
+            while (!leaf_reached) {
                 // Get the splitting plane of this internal node
                 uint32_t const split_idx = d_split_idx_v(cur-n_nodes_v);
                 uint32_t const split_bit_idx = __builtin_clzll(d_morton_v(split_idx) ^ d_morton_v(split_idx+1));
                 uint32_t const split_axis = (split_bit_idx+(dim-1)) % dim;
 
+                uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
+
                 // Get the split coordinate
                 fp_tt const split_coord = 0.5f * (d_bboxes_v(children[0]).pmax[split_axis] + d_bboxes_v(children[1]).pmin[split_axis]);
 
-                #pragma unroll 2
-                for (int ichild = 0; ichild < 2; ichild++){
-                    uint32_t const child_id = children[ichild];
-                    bool const is_leaf = (child_id < n_nodes_v) || (stack_size >= 32);
+                // Only visit the subtree containing this point
+                uint32_t child_id = children[tid > split_idx];
 
-                    if (!is_leaf) {
-                        if (d_range_min_v(child_id-n_nodes_v) <= tid && d_range_max_v(child_id-n_nodes_v) >= tid) {
-                            if (ichild == 0) {
-                                bb.pmax[split_axis] = split_coord;
-                            } else {
-                                bb.pmin[split_axis] = split_coord;
-                            }
-                            // Store the corresponding bounding box 
-                            d_boxes_v(child_id) = bb;
+                // Recompute min/max/is_leaf in case we changed child
+                bool const is_leaf = (child_id < n_nodes_v);
+                if (child_id >= n_nodes_v) {
+                    range_min = d_range_min_v(child_id-n_nodes_v);
+                    range_max = d_range_max_v(child_id-n_nodes_v);
+                } else {
+                    range_min = child_id;
+                    range_max = child_id;
+                }
 
-                            // Recurse if tid is in the subtree
-                            stack[stack_size++] = child_id;
-                        }
-                    } else {  // The child is a leaf : compute
-                        if (child_id >= n_nodes_v) {
-                            range_min = d_range_min_v(child_id-n_nodes_v);
-                            range_max = d_range_max_v(child_id-n_nodes_v);
-                        } else {
-                            range_min = child_id;
-                            range_max = child_id;
-                        }
-                        for (uint32_t obj_id = range_min; obj_id <= range_max; obj_id++){
-                            BBoxT bbfin = bb;
-                            if (ichild == 0) {
-                                bbfin.pmax[split_axis] = split_coord;
-                            } else {
-                                bbfin.pmin[split_axis] = split_coord;
-                            }
+                if (child_id == children[0]) {
+                    bb.pmax[split_axis] = split_coord;
+                } else {
+                    bb.pmin[split_axis] = split_coord;
+                }
 
-                            d_boxes_v(obj_id) = bbfin;
-                        }
+                if (!is_leaf) {
+                    // Store the corresponding bounding box 
+                    d_boxes_v(child_id) = bb;
+
+                    // Recurse if tid is in the subtree
+                    cur = child_id;
+                } else {  // The child is a leaf : compute
+                    for (uint32_t obj_id = range_min; obj_id <= range_max; obj_id++){
+                        d_boxes_v(obj_id) = bb;
                     }
+                    leaf_reached = true;
                 }
             }
         });
@@ -457,15 +449,17 @@ namespace stream::mesh {
                 #pragma unroll 2
                 for (int ichild = 0; ichild < 2; ichild++){
                     uint32_t const child_id = children[ichild];
-                    bool const is_leaf = (child_id < n_nodes_v) || (stack_size >= 32);
                     BBoxT const bbnode = d_boxes_v(child_id);
 
+                    bool is_neighbor = true;
+                    is_neighbor &= !(bbloc.max(0) < bbnode.min(0) || bbloc.min(0) > bbnode.max(0));
+                    is_neighbor &= !(bbloc.max(1) < bbnode.min(1) || bbloc.min(1) > bbnode.max(1));
+                    if (!is_neighbor) continue;
+
+                    bool const is_leaf = (child_id < n_nodes_v) || (stack_size >= 32);
                     if (!is_leaf) {
                         // We admit that the bounding box of the leaf is either 
                         // inside or touching the bounding box of the internal node
-                        bool is_neighbor = true;
-                        is_neighbor &= !(bbloc.max(0) < bbnode.min(0) || bbloc.min(0) > bbnode.max(0));
-                        is_neighbor &= !(bbloc.max(1) < bbnode.min(1) || bbloc.min(1) > bbnode.max(1));
 
                         if (is_neighbor) {
                             stack[stack_size++] = child_id;
