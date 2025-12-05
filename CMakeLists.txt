@@ -17,10 +17,19 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # Extra compile flags
+add_compile_options(
+    -Wall 
+    -Wextra 
+    -Wnon-virtual-dtor
+    -Wno-unknown-pragmas
+    -Wduplicated-cond
+    -Wduplicated-branches
+    -Wcast-align
+)
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    add_compile_options(-Wall -Wextra -Wshadow -Wno-unknown-pragmas)
+    add_compile_options(-Wshadow)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    add_compile_options(-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-unknown-pragmas -g -lineinfo)
+    add_compile_options(-Wno-unused-function -Wno-unused-parameter)
 endif()
 
 
@@ -50,7 +59,7 @@ endif()
 include(./deps/ava/ava.cmake)
 
 if (ENABLE_CUDA)
-    set(CMAKE_CUDA_FLAGS "--extended-lambda --extra-device-vectorization")
+    set(CMAKE_CUDA_FLAGS "--extended-lambda --extra-device-vectorization -g -lineinfo")
     set(CMAKE_CUDA_ARCHITECTURES ${ENABLE_ARCH})
 endif()
 # ============================= Define targets ================================
