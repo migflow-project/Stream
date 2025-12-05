@@ -28,8 +28,7 @@ solver_cg_jacobi_solve.argtypes = [
     linsys_ptr,
     # preconditioner
     prec_jacobi_ptr,
-    np.ctypeslib.ndpointer(dtype=np.float32, ndim=1, flags=(
-        "C", "ALIGNED", "WRITEABLE"))   # val
+    np.ctypeslib.ndpointer(dtype=np.float32, ndim=1, flags=("C", "ALIGNED", "WRITEABLE"))   # val
 ]
 
 

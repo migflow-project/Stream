@@ -5,7 +5,7 @@ import pathlib
 # 1. The output directory
 # 2. The install dir
 search_paths = [
-    "@LIB_INSTALL_DIR@",
+    "@CMAKE_BINARY_DIR@",
     "/usr/local/lib",
 ]
 
@@ -15,5 +15,9 @@ for path in search_paths:
         libdir_path = path
         break
 
-libgeo = np.ctypeslib.load_library("libgeometry", libdir_path)
-libnum = np.ctypeslib.load_library("libnumerics", libdir_path)
+if libdir_path == "":
+    raise ValueError("Could not the libraries")
+
+libgeo  = np.ctypeslib.load_library("libgeometry", libdir_path)
+libnum  = np.ctypeslib.load_library("libnumerics", libdir_path)
+libmesh = np.ctypeslib.load_library("libmesh",     libdir_path)

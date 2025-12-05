@@ -27,7 +27,7 @@ endif()
 # ============================= Define options ================================
 
 set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}" CACHE STRING "Library install directory")
-set(PYTHON_BUILD_DIR "${PROJECT_BINARY_DIR}/python" CACHE STRING "Python bindings build directory")
+set(PYTHON_BUILD_DIR "${PROJECT_BINARY_DIR}/stream" CACHE STRING "Python bindings build directory")
 set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/stream" CACHE STRING "Python bindings install directory")
 
 
@@ -158,4 +158,5 @@ list_dir_without_cmake_src("${geometry_INCLUDE_DIRS}")
 
 message(STATUS "Library install directory : ${CMAKE_INSTALL_LIBDIR}")
 message(STATUS "Python bindings install directory : ${PYTHON_INSTALL_DIR}")
+message(STATUS "Python bindings build directory : ${PYTHON_BUILD_DIR}")
 
