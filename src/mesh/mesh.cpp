@@ -9,6 +9,7 @@
 #include "ava_scan.h"
 #include "ava_select.h"
 #include "defines.h"
+#include "predicates.hpp"
 #include "traversal_stack.hpp"
 #include "vec.hpp"
 #include "mesh.hpp"
@@ -594,7 +595,7 @@ namespace stream::mesh {
 
                 // get the number of local element after morton neighbors insertion
                 uint32_t Tlast = d_node_nelemloc_v(node_id); 
-                uint32_t cur_neig_glob;
+                uint32_t cur_neig_glob = node_id;
 
                 uint32_t non_delaunay_start_idx = d_non_delaunay_start_v(node_id);
                 Stack stack;
@@ -611,8 +612,6 @@ namespace stream::mesh {
                     };
 
                     cur_neig_glob = node_id;
-                    fp_tt best_distance = limits<fp_tt>::max(); // Can change this to get the 
-                                                                // alpha-shape !
 
                     // Get circumsphere
                     VecT const p1 = d_nodes_m_v(node_id);
@@ -628,7 +627,7 @@ namespace stream::mesh {
                     fp_tt const l3 = cb.sqnorm();
 
                     fp_tt const det = ba.cross(ca);
-                    fp_tt circum_rsqr = 1.001f*(
+                    fp_tt circum_rsqr = 1.0000001f*(
                             ( l1*l2*l3 ) / (4.f*det*det)
                             );
 
@@ -637,9 +636,11 @@ namespace stream::mesh {
                     fp_tt oy = p3[1] - 0.5f*(l3*ca[0] - l2*cb[0])/det;
 
                     // Stack for DFS on the tree
-                    uint32_t range_min;
-                    uint32_t range_max;
                     stack.push(d_root_v(0), 0.0f);
+
+                    // Cannot search farther than the circumsphere
+                    fp_tt best_distance = 4.f*circum_rsqr; // Can change this to get the 
+                                                           // alpha-shape !
 
                     while (stack.len != 0) {
 
@@ -654,50 +655,41 @@ namespace stream::mesh {
                         #pragma unroll 2
                         for (int ichild = 0; ichild < 2; ichild++){
                             uint32_t const child_id = children[ichild];
-                            bool const is_leaf = (child_id < n_nodes_v) || (stack.len >= Stack::MaxStackSize);
+                            bool const is_leaf = (child_id < n_nodes_v);
 
                             if (!is_leaf) {
                                 BBoxT const node_data = d_internal_data_v(child_id);
 
+                                fp_tt dmaxx = std::fmax(p1[0] - node_data.max(0), 0.0f);
+                                fp_tt dmaxy = std::fmax(p1[1] - node_data.max(1), 0.0f);
+                                fp_tt dminx = std::fmax(node_data.min(0) - p1[0], 0.0f);
+                                fp_tt dminy = std::fmax(node_data.min(1) - p1[1], 0.0f);
+                                fp_tt const sqDistPoint = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
+                                if (sqDistPoint >= best_distance) continue;
+
                                 // Check if circumsphere intersects the internal node 
                                 // And that it is closer than the current best distance.
-                                fp_tt dmaxx = std::fmax(ox - node_data.max(0), 0.0f);
-                                fp_tt dmaxy = std::fmax(oy - node_data.max(1), 0.0f);
-                                fp_tt dminx = std::fmax(node_data.min(0) - ox, 0.0f);
-                                fp_tt dminy = std::fmax(node_data.min(1) - oy, 0.0f);
+                                dmaxx = std::fmax(ox - node_data.max(0), 0.0f);
+                                dmaxy = std::fmax(oy - node_data.max(1), 0.0f);
+                                dminx = std::fmax(node_data.min(0) - ox, 0.0f);
+                                dminy = std::fmax(node_data.min(1) - oy, 0.0f);
                                 fp_tt const sqDist = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
+                                if (sqDist >= circum_rsqr) continue;
 
-                                dmaxx = std::fmax(p1[0] - node_data.max(0), 0.0f);
-                                dmaxy = std::fmax(p1[1] - node_data.max(1), 0.0f);
-                                dminx = std::fmax(node_data.min(0) - p1[0], 0.0f);
-                                dminy = std::fmax(node_data.min(1) - p1[1], 0.0f);
-                                fp_tt const sqDistPoint = dmaxx*dmaxx + dminx*dminx + dmaxy*dmaxy + dminy*dminy; 
-
-                                if (sqDist < circum_rsqr && sqDistPoint < best_distance) {
-                                    stack.push(child_id, sqDistPoint);
-                                }
+                                stack.push(child_id, sqDistPoint);
                             } else {  // The child is a leaf : compute
-                                if (child_id >= n_nodes_v) {
-                                    range_min = d_range_min_v(child_id-n_nodes_v);
-                                    range_max = d_range_max_v(child_id-n_nodes_v);
-                                } else {
-                                    range_min = child_id;
-                                    range_max = child_id;
-                                }
-                                for (uint32_t obj_id = range_min; obj_id <= range_max; obj_id++){
 
-                                    // Do not check nodes that are part of the element
-                                    if (obj_id == node_id || obj_id == neig[0] || obj_id == neig[1]) continue; 
+                                // Do not check nodes that are part of the element
+                                if (child_id == node_id || child_id == neig[0] || child_id == neig[1]) continue; 
 
-                                    // Check if the node found is closer than the 
-                                    // current best guess and that it is inside the 
-                                    // circumsphere of the element
-                                    VecT const inserted_node = d_nodes_m_v(obj_id);
-                                    fp_tt const d2 = (p1 - inserted_node).sqnorm();
-                                    if (d2 < best_distance && incircle_SoS(node_id, neig[0], neig[1], obj_id, d_nodes_m_v) > 0.0f){ 
-                                        cur_neig_glob = obj_id;
-                                        best_distance = d2;
-                                    }
+                                // Check if the node found is closer than the 
+                                // current best guess and that it is inside the 
+                                // circumsphere of the element
+                                VecT const inserted_node = d_nodes_m_v(child_id);
+                                fp_tt const d2 = (p1 - inserted_node).sqnorm();
+                                if (d2 < best_distance && incircle_SoS(node_id, neig[0], neig[1], child_id, d_nodes_m_v) > 0.0f){ 
+                                    cur_neig_glob = child_id;
+                                    best_distance = d2;
                                 }
                             }
                         }
@@ -710,7 +702,7 @@ namespace stream::mesh {
                         // If no node where found, the element is Delaunay
                         // and we can mark it as such to not use it during the 
                         // retriangulation phase
-                        tloc.get_elem(elem_offset, elem_test) = tloc.get_elem(elem_offset, non_delaunay_start_idx);
+                        tloc.get_elem(elem_offset, elem_test) = std::move(tloc.get_elem(elem_offset, non_delaunay_start_idx));
                         tloc.get_elem(elem_offset, non_delaunay_start_idx) = elem_loc;
                         non_delaunay_start_idx++;
                     }

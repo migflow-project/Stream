@@ -92,7 +92,7 @@ namespace stream::mesh {
         // This is used to allocate the memory of the edge array. 
         // A good value for this parameter ensures that the majority of the 
         // nodes are processed in the first triangulation phase without too much cost
-        static constexpr uint32_t const n_neig_guess = (dim == 2) ? 32 : 32;
+        static constexpr uint32_t const n_neig_guess = 32;
 
         // PARAMETER : can be modifier
         // Number of morton neighbors to insert in the initial triangulation.
@@ -100,7 +100,7 @@ namespace stream::mesh {
         // of the simplices in the initial triangulation.
         // A good value for this parameter ensures that only a few insertions
         // are needed afterwards.
-        static constexpr uint32_t const n_init_insert = (dim == 2) ? 10 : 10;
+        static constexpr uint32_t const n_init_insert = 10;
 
         // CONSTANT : cannot be modified
         // Maximum number of local simplices given initial guess of number of 
