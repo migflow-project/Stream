@@ -5,6 +5,8 @@ set(PYTHON_API_SRC
   numerics/csr.py
   numerics/jacobi.py
   numerics/linsys.py
+  mesh/__init__.py
+  mesh/mesh.py
 )
 
 foreach(f ${PYTHON_API_SRC})

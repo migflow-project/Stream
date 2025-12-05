@@ -34,21 +34,31 @@ extern "C" {
     Mesh2D* Mesh2D_create();
 
     // Destroy a 2D mesh
-    void Mesh2D_destroy(Mesh2D* mesh);
+    void Mesh2D_destroy(Mesh2D * mesh);
 
     // Set the nodes of the 2D mesh
-    void Mesh2D_set_nodes(Mesh2D* mesh, fp_tt const * const coords);
+    void Mesh2D_set_nodes(Mesh2D * const mesh, uint32_t nnodes, fp_tt const * const coords);
 
-    // Initialize the mesh
-    void Mesh2D_init(Mesh2D* mesh);
+    // Initialize the mesh by inserting the root node in the super-simplex
+    void Mesh2D_init(Mesh2D * const mesh);
 
-    // Compute the mesh
-    void Mesh2D_compute(Mesh2D* mesh);
+    // Insert a few morton neighbors in the local triangulation
+    void Mesh2D_insert_morton_neighbors(Mesh2D * const mesh);
 
-    // Compress the mesh 
-    void Mesh2D_compress(Mesh2D* mesh);
+    // Insert 2 nodes per quadrant around the root node in the local triangulation
+    void Mesh2D_insert_quadrant_neighbors(Mesh2D * const mesh);
 
+    // Insert all the leaves of the BVH that are adjaccent to the leaf of 
+    // the root node
+    void Mesh2D_insert_BVH_neighbors(Mesh2D * const mesh);
 
+    // Insert by checking the simplices circumspheres
+    void Mesh2D_insert_iterative(Mesh2D * const mesh);
+
+    void Mesh2D_remove_super_nodes(Mesh2D * const mesh);
+
+    uint32_t Mesh2D_get_nelem(Mesh2D * const mesh);
+    void Mesh2D_get_elem(Mesh2D * const mesh, uint32_t * const elems);
 #ifdef __cplusplus
 }
 #endif
