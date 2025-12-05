@@ -945,3 +945,77 @@ namespace stream::mesh {
     }
 
 } // namespace stream::mesh
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Create an empty 2D mesh
+Mesh2D* Mesh2D_create() {
+    return new Mesh2D;
+}
+
+// Destroy a 2D mesh
+void Mesh2D_destroy(Mesh2D * mesh){
+    delete mesh;
+}
+
+// Set the nodes of the 2D mesh
+void Mesh2D_set_nodes(Mesh2D * const mesh, uint32_t nnodes, fp_tt const * const nodes) {
+    using VecT = Mesh2D::VecT;
+    AvaDeviceArray<VecT, int>::Ptr d_nodes = AvaDeviceArray<VecT, int>::create({(int) nnodes});
+
+    gpu_memcpy(d_nodes->data, nodes, sizeof(VecT)*nnodes, gpu_memcpy_host_to_device);
+
+    mesh->d_nodes = d_nodes;
+}
+
+// Initialize the mesh by inserting the root node in the super-simplex
+void Mesh2D_init(Mesh2D * const mesh) {
+    mesh->init();
+}
+
+// Insert a few morton neighbors in the local triangulation
+void Mesh2D_insert_morton_neighbors(Mesh2D * const mesh) {
+    mesh->insert_morton_neighbors();
+}
+
+// Insert 2 nodes per quadrant around the root node in the local triangulation
+void Mesh2D_insert_quadrant_neighbors(Mesh2D * const mesh) {
+    mesh->insert_quadrant_neighbors();
+}
+
+// Insert all the leaves of the BVH that are adjaccent to the leaf of 
+// the root node
+void Mesh2D_insert_BVH_neighbors(Mesh2D * const mesh) {
+    mesh->insert_BVH_neighbors();
+}
+
+void Mesh2D_remove_super_nodes(Mesh2D * const mesh) {
+    mesh->remove_super_nodes();
+}
+
+void Mesh2D_insert_iterative(Mesh2D * const mesh) {
+    mesh->insert_by_circumsphere_checking();
+}
+
+uint32_t Mesh2D_get_nelem(Mesh2D * const mesh) {
+    mesh->compress_into_global();
+    return mesh->n_elems;
+}
+
+void Mesh2D_get_elem(Mesh2D * const mesh, uint32_t * const elems) {
+    using Elem = Mesh2D::Elem;
+
+    gpu_memcpy(elems, mesh->d_elemglob->data, sizeof(Elem)*mesh->n_elems, gpu_memcpy_device_to_host);
+}
+
+void Mesh2D_get_ordered_nodes(Mesh2D * const mesh, fp_tt * const nodes) {
+    gpu_memcpy(nodes, mesh->lbvh.d_obj_m->data, sizeof(Mesh2D::VecT)*mesh->n_nodes, gpu_memcpy_device_to_host);
+}
+
+
+#ifdef __cplusplus
+}
+#endif
