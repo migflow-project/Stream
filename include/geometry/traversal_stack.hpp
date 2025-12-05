@@ -24,6 +24,10 @@ namespace stream::geo {
         TraversalStack() = default;
         ~TraversalStack() = default;
 
+        __host__ __device__ inline Pair peek() const {
+            return stack[0];
+        }
+
         __host__ __device__ void inline push(IdxT idx, CostT cost) {
             stack[len++] = {idx, cost};
 

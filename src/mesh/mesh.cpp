@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <ctime>
 #include "ava_device_array.h"
+#include "ava_host_array.h"
 #include "ava_host_array.hpp"
 #include "ava_view.h"
 #include "ava_scan.h"
@@ -641,9 +642,12 @@ namespace stream::mesh {
                     stack.push(d_root_v(0), 0.0f);
 
                     while (stack.len != 0) {
-                        Stack::Pair const pair = stack.pop();
+
+                        Stack::Pair const pair = stack.peek();
                         uint32_t const cur = pair.first;
-                        if (pair.second >= best_distance) continue;
+                        if (pair.second >= best_distance) break;
+
+                        stack.pop();
 
                         uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
 

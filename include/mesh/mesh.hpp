@@ -153,24 +153,12 @@ namespace stream::mesh {
         void init(void);
 
         void insert_morton_neighbors(void);
-        // void insert_morton_neighbors() requires (dim==3);
         
         void insert_quadrant_neighbors(void);
         void insert_BVH_neighbors(void);
         void insert_by_circumsphere_checking(void);
 
         void remove_super_nodes(void);
-        
-        // Compute the triangulation
-        void compute();
-
-        // Check if there are nodes that are not done computing their triangulation
-        void check_if_done() const;
-
-        // Compress the local triangulations that are done.
-        // WARNING: Only call this when there are unfinished nodes. If all nodes
-        //          have computed their triangulation, call "compress_into_global()"
-        void compress_finished_nodes(void);
 
         // Compress the local triangulations into a global one, without 
         // simplex duplication. 
