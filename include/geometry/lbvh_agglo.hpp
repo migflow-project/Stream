@@ -177,7 +177,7 @@ namespace stream::geo {
             AvaView<uint64_t, -1> d_morton_v  = d_morton->to_view<-1>();
 
             ava_for<AVA_BLOCK_SIZE>(0, 0, n, [=] __device__ (size_t const tid){
-                constexpr uint64_t imax = 1ULL << (64 / dim);
+                constexpr uint64_t imax = 1ULL << ((8*sizeof(imax)) / dim);
                 VecT const range = d_bb_glob_v(0).pmax - d_bb_glob_v(0).pmin;
                 VecT mortonFactor;
                 for (int i = 0; i < dim; ++i){
@@ -287,18 +287,17 @@ namespace stream::geo {
                     if (right_parent) {
                         // Attach node to right parent
                         parent = imax + n_v;
-                        d_parent_v(idx) = parent;
                         d_child_left_v(parent-n_v) = idx;
                         d_range_min_v(parent-n_v) = imin;
                         __threadfence();
                     } else {
                         // Attach node to left parent
                         parent = imin + n_v - 1;
-                        d_parent_v(idx) = parent;
                         d_child_right_v(parent-n_v) = idx;
                         d_range_max_v(parent-n_v) = imax;
                         __threadfence();
                     }
+                    d_parent_v(idx) = parent;
 
                     if (ava::atomic::fetch_add(&d_touched_v(parent-n_v), 1U)) {
                         uint32_t sibling;
@@ -331,10 +330,36 @@ namespace stream::geo {
 
         // Build the LBVH tree
         void build(){
+            struct timespec t0, t1;
+            printf("================ Tree Construction ====================\n");
+
+            timespec_get(&t0, TIME_UTC);
             _compute_global_bbox();
+            gpu_device_synchronise();
+            timespec_get(&t1, TIME_UTC);
+            printf("Compute global bbox : %.5f ms\n",
+                    (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
+
+            timespec_get(&t0, TIME_UTC);
             _compute_morton_codes();
+            gpu_device_synchronise();
+            timespec_get(&t1, TIME_UTC);
+            printf("Compute morton codes: %.5f ms\n",
+                    (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
+
+            timespec_get(&t0, TIME_UTC);
             _sort_objects();
+            gpu_device_synchronise();
+            timespec_get(&t1, TIME_UTC);
+            printf("Sort objects according to morton codes: %.5f ms\n",
+                    (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
+
+            timespec_get(&t0, TIME_UTC);
             _build_hierarchy();
+            timespec_get(&t1, TIME_UTC);
+            gpu_device_synchronise();
+            printf("Build hierarchy (build+fit): %.5f ms\n",
+                    (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
         }
 
     };
