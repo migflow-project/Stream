@@ -39,6 +39,8 @@ extern "C" {
     // Solve a system of equations using Conjugate Gradient with Jacobi preconditioner
     uint32_t SolverCG_jacobi_solve(SolverCG * solver, LinSys const * const sys, PrecJacobi_st const * const prec, fp_tt * x);
 
+    uint32_t SolverCG_solve(SolverCG * solver, LinSys const * const sys, fp_tt * x);
+
 #ifdef __cplusplus
 }
 #endif
@@ -47,7 +49,10 @@ namespace stream::numerics {
     struct Solver {
         virtual ~Solver() {};
         // Solve the system of equation 
-        virtual uint32_t solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr sol) { 
+        virtual uint32_t solve_precond(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr sol) { 
+            return 0;
+        };
+        virtual uint32_t solve(LinearSystem const * const system, AvaDeviceArray<fp_tt, int>::Ptr sol) { 
             return 0;
         };
     };
@@ -67,7 +72,11 @@ namespace stream::numerics {
 
         fp_tt dot_prod(AvaDeviceArray<fp_tt, int>::Ptr d_u, AvaDeviceArray<fp_tt, int>::Ptr d_v) noexcept;
 
-        uint32_t solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr x) override;
+        // Solve the system without preconditioner
+        uint32_t solve(LinearSystem const * const system, AvaDeviceArray<fp_tt, int>::Ptr x) override;
+
+        // Solve the system using the generic preconditioner @prec
+        uint32_t solve_precond(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr x) override;
     };
 
 } // namespace stream::numerics

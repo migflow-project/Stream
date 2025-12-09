@@ -31,6 +31,15 @@ solver_cg_jacobi_solve.argtypes = [
     np.ctypeslib.ndpointer(dtype=np.float32, ndim=1, flags=("C", "ALIGNED", "WRITEABLE"))   # val
 ]
 
+solver_cg_solve = libnum.SolverCG_solve
+solver_cg_solve.restype = ctypes.c_uint32
+solver_cg_solve.argtypes = [
+    # solver
+    solver_cg_ptr,
+    # system
+    linsys_ptr,
+    np.ctypeslib.ndpointer(dtype=np.float32, ndim=1, flags=("C", "ALIGNED", "WRITEABLE"))   # val
+]
 
 # ========================== Python wrapper classes =========================
 
@@ -55,5 +64,15 @@ class SolverCG:
 
         sol = np.copy(x).astype(np.float32)
         niter = solver_cg_jacobi_solve(self.solver, sys.sys, prec.prec, sol)
+        x[:] = sol[:]
+        return niter
+
+    def solve(
+            self,
+            sys: LinSys,
+            x: npt.NDArray[np.float32]
+    ):
+        sol = np.copy(x).astype(np.float32)
+        niter = solver_cg_solve(self.solver, sys.sys, sol)
         x[:] = sol[:]
         return niter
