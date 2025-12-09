@@ -18,7 +18,8 @@ template struct stream::mesh::Mesh<2>;
 
 namespace stream::mesh {
 
-    using Stack = geo::TraversalStack<uint32_t, fp_tt, 32>;
+    using Heap = geo::TraversalMinHeap<uint32_t, fp_tt, 32>;
+    using Stack = geo::TraversalStack<uint32_t, 32>;
 
     template<int dim, uint32_t block_size>
     Mesh<dim, block_size>::Mesh() noexcept {
@@ -440,12 +441,12 @@ namespace stream::mesh {
 
             uint32_t range_min;
             uint32_t range_max;
-            uint32_t stack[32];
-            uint8_t stack_size = 0;
-            stack[stack_size++] = d_root_v(0);
+            Stack stack;
+            stack.push(d_root_v(0));
 
-            while (stack_size != 0) {
-                uint32_t const cur = stack[--stack_size];
+            while (stack.len != 0) {
+                uint32_t const cur = stack.peek();
+                stack.pop();
                 uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
 
                 #pragma unroll 2
@@ -458,13 +459,13 @@ namespace stream::mesh {
                     is_neighbor &= !(bbloc.max(1) < bbnode.min(1) || bbloc.min(1) > bbnode.max(1));
                     if (!is_neighbor) continue;
 
-                    bool const is_leaf = (child_id < n_nodes_v) || (stack_size >= 32);
+                    bool const is_leaf = (child_id < n_nodes_v) || (stack.len >= Stack::MaxSize);
                     if (!is_leaf) {
                         // We admit that the bounding box of the leaf is either 
                         // inside or touching the bounding box of the internal node
 
                         if (is_neighbor) {
-                            stack[stack_size++] = child_id;
+                            stack.push(child_id);
                         }
                     } else {  // The child is a leaf : compute
                         if (child_id >= n_nodes_v) {
@@ -598,7 +599,7 @@ namespace stream::mesh {
                 uint32_t cur_neig_glob = node_id;
 
                 uint32_t non_delaunay_start_idx = d_non_delaunay_start_v(node_id);
-                Stack stack;
+                Heap stack;
 
                 // Get the new neighbor by finding a node inside the circumsphere 
                 // of one of the current elements. If no node are found inside 
@@ -644,7 +645,7 @@ namespace stream::mesh {
 
                     while (stack.len != 0) {
 
-                        Stack::Pair const pair = stack.peek();
+                        Heap::Pair const pair = stack.peek();
                         uint32_t const cur = pair.first;
                         if (pair.second >= best_distance) break;
 

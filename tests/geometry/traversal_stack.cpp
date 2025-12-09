@@ -1,7 +1,7 @@
 #include "traversal_stack.hpp"
 #include <cstdio>
 
-using Stack = stream::geo::TraversalStack<int, float, 32>;
+using Stack = stream::geo::TraversalMinHeap<int, float, 32>;
 
 int main(void) {
 
@@ -21,7 +21,8 @@ int main(void) {
 
     int len = stack.len;
     for (int i = 0; i < len; i++){
-        Stack::Pair p = stack.pop();
+        Stack::Pair p = stack.peek();
+        stack.pop();
         printf("Element %d = %d, %f\n", i, p.first, p.second);
     }
 
