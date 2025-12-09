@@ -39,7 +39,7 @@ namespace stream::numerics {
         return dot;
     }
 
-    uint32_t ConjugateGradient::solve(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr sol) {
+    uint32_t ConjugateGradient::solve_precond(LinearSystem const * const system, Preconditioner const * const prec, AvaDeviceArray<fp_tt, int>::Ptr sol) {
 
         uint32_t n = sol->size;
 
@@ -78,6 +78,7 @@ namespace stream::numerics {
 
         // Compute first iteration
         fp_tt sq_res = dot_prod(d_r, d_d);
+        printf("Initial squared residue : %.5f\n", sq_res);
 
         uint32_t cg_iter = 0;
         do {
@@ -98,19 +99,7 @@ namespace stream::numerics {
             fp_tt const alpha = sq_res/dTd1;
             ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){ 
                 d_x_v(tid) += alpha*d_d_v(tid);
-
-                if ((cg_iter+1) % 50 == 0) {
-                    uint32_t const start = d_row_v(tid);
-                    uint32_t const end = d_row_v(tid+1);
-
-                    fp_tt dot = 0.0f;
-                    for (uint32_t i = start; i < end; i++){
-                        dot += d_A_v(i)*d_x_v(d_col_v(i));
-                    }
-                    d_r_v(tid) = d_b_v(tid) - dot;
-                } else {
-                    d_r_v(tid) -= alpha*d_d1_v(tid);
-                }
+                d_r_v(tid) -= alpha*d_d1_v(tid);
             });
             prec->solve(d_s, d_r);
 
@@ -123,7 +112,79 @@ namespace stream::numerics {
             });
         } while (std::sqrt(sq_res) > 1e-6f && cg_iter++ < 10000);
 
-        printf("Residue after %u iterations : %f\n", cg_iter, sq_res);
+        printf("Residue after %u iterations : %f\n", cg_iter, std::sqrt(sq_res));
+        return cg_iter;
+    }
+
+    uint32_t ConjugateGradient::solve(LinearSystem const * const system, AvaDeviceArray<fp_tt, int>::Ptr sol) {
+
+        uint32_t n = sol->size;
+
+        d_r->resize({(int) n});
+        d_d->resize({(int) n});
+        d_d1->resize({(int) n});
+        d_tmp_dot->resize({(int) n}); // Temp memory for dot product
+        d_temp->resize({(int) n});    // Temp memory for CUB calls
+        temp_size = n*sizeof(fp_tt);
+
+        AvaView<uint32_t, -1> d_col_v = system->d_csr.d_col->to_view<-1>();
+        AvaView<uint32_t, -1> d_row_v = system->d_csr.d_row->to_view<-1>();
+        AvaView<fp_tt, -1> d_A_v = system->d_csr.d_val->to_view<-1>();
+        AvaView<fp_tt, -1> d_b_v = system->d_b->to_view<-1>();
+        AvaView<fp_tt, -1> d_r_v = d_r->to_view<-1>();
+        AvaView<fp_tt, -1> d_d_v = d_d->to_view<-1>();
+        AvaView<fp_tt, -1> d_d1_v = d_d1->to_view<-1>();
+        AvaView<fp_tt, -1> d_x_v = sol->to_view<-1>();
+
+        // Init r = b - Ax0
+        ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){
+            uint32_t const start = d_row_v(tid);
+            uint32_t const end = d_row_v(tid+1);
+
+            fp_tt dot = 0.0f;
+            for (uint32_t i = start; i < end; i++){
+                dot += d_A_v(i)*d_x_v(d_col_v(i));
+            }
+            d_r_v(tid) = d_b_v(tid) - dot;
+            d_d_v(tid) = d_r_v(tid);
+        });
+
+        // Compute first iteration
+        fp_tt sq_res = dot_prod(d_r, d_r);
+        printf("Initial squared residue : %.5f\n", sq_res);
+
+        uint32_t cg_iter = 0;
+        do {
+            // Compute d1 = Ad
+            ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){
+                uint32_t const start = d_row_v(tid);
+                uint32_t const end = d_row_v(tid+1);
+
+                fp_tt dot = 0.0f;
+                for (uint32_t i = start; i < end; i++){
+                    dot += d_A_v(i)*d_d_v(d_col_v(i));
+                }
+
+                d_d1_v(tid) = dot;
+            });
+
+            fp_tt dTd1 = dot_prod(d_d, d_d1);
+            fp_tt const alpha = sq_res/dTd1;
+            ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){ 
+                d_x_v(tid) += alpha*d_d_v(tid);
+                d_r_v(tid) -= alpha*d_d1_v(tid);
+            });
+
+            fp_tt const old_sq_res = sq_res;
+            sq_res = dot_prod(d_r, d_r);
+
+            fp_tt const beta = sq_res/old_sq_res;
+            ava_for<256>(nullptr, 0, n, [=] __device__ (uint32_t const tid){ 
+                d_d_v(tid) = d_r_v(tid) + beta*d_d_v(tid);
+            });
+        } while (std::sqrt(sq_res) > 1e-6f && cg_iter++ < 10000);
+
+        printf("Residue after %u iterations : %f\n", cg_iter, std::sqrt(sq_res));
         return cg_iter;
     }
 } // namespace stream::numerics
@@ -143,7 +204,15 @@ void SolverCG_destroy(SolverCG* solver) {
 uint32_t SolverCG_jacobi_solve(SolverCG * solver, LinSys const * const sys, PrecJacobi_st const * const prec, fp_tt * x) {
     AvaDeviceArray<fp_tt, int>::Ptr sol = AvaDeviceArray<fp_tt, int>::create({(int) sys->n});
     gpu_memcpy(sol->data, x, sys->n*sizeof(*x), gpu_memcpy_host_to_device);
-    uint32_t niter = solver->solve(sys, prec, sol);
+    uint32_t niter = solver->solve_precond(sys, prec, sol);
+    gpu_memcpy(x, sol->data, sys->n*sizeof(*x), gpu_memcpy_device_to_host);
+    return niter;
+}
+
+uint32_t SolverCG_solve(SolverCG * solver, LinSys const * const sys, fp_tt * x) {
+    AvaDeviceArray<fp_tt, int>::Ptr sol = AvaDeviceArray<fp_tt, int>::create({(int) sys->n});
+    gpu_memcpy(sol->data, x, sys->n*sizeof(*x), gpu_memcpy_host_to_device);
+    uint32_t niter = solver->solve(sys, sol);
     gpu_memcpy(x, sol->data, sys->n*sizeof(*x), gpu_memcpy_device_to_host);
     return niter;
 }
