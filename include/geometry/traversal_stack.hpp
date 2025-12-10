@@ -24,11 +24,11 @@ namespace stream::geo {
         TraversalMinHeap() = default;
         ~TraversalMinHeap() = default;
 
-        __device__ inline Pair peek() const {
+        __host__ __device__ inline Pair peek() const {
             return stack[0];
         }
 
-        __device__ void inline push(IdxT idx, CostT cost) {
+        __host__ __device__ void inline push(IdxT idx, CostT cost) {
             stack[len++] = {idx, cost};
 
             int index = len - 1;
@@ -44,7 +44,7 @@ namespace stream::geo {
             }
         }
 
-        __device__ inline void pop() { 
+        __host__ __device__ inline void pop() { 
             stack[0] = stack[--len];
 
             // Heapify the tree starting from the element at the
@@ -85,9 +85,9 @@ namespace stream::geo {
         TraversalStack() = default;
         ~TraversalStack() = default;
 
-        __device__ inline IdxT peek() const { return stack[len-1]; }
-        __device__ void inline push(IdxT idx) { stack[len++] = idx; }
-        __device__ inline void pop() { len--; }
+        __host__ __device__ inline IdxT peek() const { return stack[len-1]; }
+        __host__ __device__ void inline push(IdxT idx) { stack[len++] = idx; }
+        __host__ __device__ inline void pop() { len--; }
     };
 } // namespace stream::geo
 

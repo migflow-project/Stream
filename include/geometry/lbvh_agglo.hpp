@@ -356,8 +356,8 @@ namespace stream::geo {
 
             timespec_get(&t0, TIME_UTC);
             _build_hierarchy();
-            timespec_get(&t1, TIME_UTC);
             gpu_device_synchronise();
+            timespec_get(&t1, TIME_UTC);
             printf("Build hierarchy (build+fit): %.5f ms\n",
                     (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
         }
