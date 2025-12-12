@@ -11,6 +11,8 @@ target_sources(geometry PUBLIC
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/morton.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/lbvh.hpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/trbvh.hpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/lbvh_agglo.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/predicates.hpp
           ${CMAKE_CURRENT_SOURCE_DIR}/traversal_stack.hpp
 )
