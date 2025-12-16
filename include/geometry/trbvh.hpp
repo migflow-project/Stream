@@ -387,7 +387,7 @@ namespace stream::geo {
             uint32_t const min_size_v = min_size;
 
 
-            ava_for<AVA_BLOCK_SIZE>(0, 0, n_v, [=] __device__ (uint32_t const i) {
+            ava_for<32>(0, 0, n_v, [=] __device__ (uint32_t const i) {
                 uint32_t idx = i;
                 uint32_t parent = d_parent_v(i);
                 uint32_t subtree_size = d_subtree_size_v(i);
@@ -463,9 +463,10 @@ namespace stream::geo {
                         // Optimize subset 
                         uint8_t p_opt[num_subsets] = {0};
                         for (uint8_t k = 2; k <= treelet_size; k++) {
-                            for (uint8_t s = 1; s < num_subsets; s++){
-                                if (__builtin_popcount(s) != k) continue;
+                            uint8_t s = (1 << k) - 1;
 
+                            while (true) {
+                                if (__builtin_popcount(s) != k) break;
                                 fp_tt cs = FLT_MAX;
                                 uint8_t ps = 0;
 
@@ -490,6 +491,17 @@ namespace stream::geo {
                                 // Compute final SAH 
                                 c_opt[s] = std::fmin(Ci*areas[s] + cs, Ct*areas[s]*t);
                                 p_opt[s] = ps;
+
+                                // Compute next permutation
+                                uint8_t tmp = s | (s - 1); // t gets v's least significant 0 bits set to 1
+
+                                // Next set to 1 the most significant bit to change, 
+                                // set to 0 the least significant ones, and add the necessary 1 bits.
+#ifdef __CUDACC__
+                                s = ((tmp + 1) | (((~tmp & -(~tmp)) - 1) >> (__builtin_clz(__brev(s)) + 1))) & (num_subsets - 1);  
+#else 
+                                s = ((tmp + 1) | (((~tmp & -(~tmp)) - 1) >> (__builtin_ctz(s) + 1))) & (num_subsets - 1);  
+#endif
                             }
                         }
 
