@@ -62,12 +62,10 @@ namespace stream::geo {
         AvaDeviceArray<uint32_t, int>::Ptr d_map;         // 0, 1, 2, 3, ..., n-1
         AvaDeviceArray<uint32_t, int>::Ptr d_map_sorted;  // d_map sorted accorting to the morton codes
 
-        AvaDeviceArray<uint32_t, int>::Ptr d_child_left;   // ID of left child
-        AvaDeviceArray<uint32_t, int>::Ptr d_child_right;  // ID of right child
-        AvaDeviceArray<uint32_t, int>::Ptr d_range_min;    // starting index of the range of leaves in the subtree of i-th internal node
-        AvaDeviceArray<uint32_t, int>::Ptr d_range_max;    // last index of the range of leaves in the subtree of i-th internal node
-        AvaDeviceArray<uint64_t, int>::Ptr d_delta;  // Delta function
-        AvaDeviceArray<uint32_t, int>::Ptr d_split_idx;  // Index of the split
+        AvaDeviceArray<uint32_t, int>::Ptr d_children;     // ID of children 
+        AvaDeviceArray<uint32_t, int>::Ptr d_range;        // Range of indices of leaves in the subtree of i-th internal node
+        AvaDeviceArray<uint64_t, int>::Ptr d_delta;        // Delta function
+        AvaDeviceArray<uint32_t, int>::Ptr d_split_idx;    // Axis of the split
 
         typename AvaDeviceArray<DataT, int>::Ptr d_internal_data;  // Data stored on each internal node
                                   
@@ -93,10 +91,8 @@ namespace stream::geo {
             d_map = AvaDeviceArray<uint32_t, int>::create({0});
             d_map_sorted = AvaDeviceArray<uint32_t, int>::create({0});
 
-            d_child_left = AvaDeviceArray<uint32_t, int>::create({0});
-            d_child_right = AvaDeviceArray<uint32_t, int>::create({0});
-            d_range_min = AvaDeviceArray<uint32_t, int>::create({0});
-            d_range_max = AvaDeviceArray<uint32_t, int>::create({0});
+            d_children = AvaDeviceArray<uint32_t, int>::create({0, 2});
+            d_range = AvaDeviceArray<uint32_t, int>::create({0, 2});
             d_delta = AvaDeviceArray<uint64_t, int>::create({0});
             d_split_idx = AvaDeviceArray<uint32_t, int>::create({0});
 
@@ -116,10 +112,8 @@ namespace stream::geo {
             d_map = AvaDeviceArray<uint32_t, int>::create({(int) n});
             d_map_sorted = AvaDeviceArray<uint32_t, int>::create({(int) n});
 
-            d_child_left = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
-            d_child_right = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
-            d_range_min = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
-            d_range_max = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
+            d_children = AvaDeviceArray<uint32_t, int>::create({(int) (n-1), 2});
+            d_range = AvaDeviceArray<uint32_t, int>::create({(int) (n-1), 2});
             d_delta = AvaDeviceArray<uint64_t, int>::create({(int) (n-1)});
             d_split_idx = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
 
@@ -260,10 +254,8 @@ namespace stream::geo {
             AvaView<DataT, -1>    d_internal_data_v = d_internal_data->template to_view<-1>();
             AvaView<uint32_t, -1> d_touched_v       = d_touched->to_view<-1>();
             AvaView<uint32_t, -1> d_parent_v        = d_parent->to_view<-1>();
-            AvaView<uint32_t, -1> d_range_min_v     = d_range_min->to_view<-1>();
-            AvaView<uint32_t, -1> d_range_max_v     = d_range_max->to_view<-1>();
-            AvaView<uint32_t, -1> d_child_left_v    = d_child_left->to_view<-1>();
-            AvaView<uint32_t, -1> d_child_right_v   = d_child_right->to_view<-1>();
+            AvaView<uint32_t, -1, 2> d_range_v     = d_range->to_view<-1, 2>();
+            AvaView<uint32_t, -1, 2> d_children_v    = d_children->to_view<-1, 2>();
             AvaView<uint32_t, -1> d_root_v          = d_root->to_view<-1>();
             uint32_t n_v = static_cast<uint32_t>(n);
 
@@ -283,42 +275,27 @@ namespace stream::geo {
                         break;
                     }
 
+                    // Choose whether we attach this node to the right or left parent
                     bool const right_parent = imin == 0 || (imax != n_v-1 && d_delta_v(imax) < d_delta_v(imin-1));
-                    if (right_parent) {
-                        // Attach node to right parent
-                        parent = imax + n_v;
-                        d_child_left_v(parent-n_v) = idx;
-                        d_range_min_v(parent-n_v) = imin;
-                        __threadfence();
-                    } else {
-                        // Attach node to left parent
-                        parent = imin + n_v - 1;
-                        d_child_right_v(parent-n_v) = idx;
-                        d_range_max_v(parent-n_v) = imax;
-                        __threadfence();
-                    }
+
+                    parent = right_parent ? imax+n_v : imin+n_v-1;
+                    d_range_v(parent-n_v, !right_parent) = right_parent ? imin : imax;
+                    d_children_v(parent-n_v, !right_parent) = idx;
                     d_parent_v(idx) = parent;
+                    __threadfence();
 
                     if (ava::atomic::fetch_add(&d_touched_v(parent-n_v), 1U)) {
-                        uint32_t sibling;
-                        uint32_t split_idx;
-                        if (right_parent) {
-                            sibling   = d_child_right_v(parent-n_v);
-                            split_idx = imax;
-                        } else {
-                            sibling = d_child_left_v(parent-n_v);
-                            split_idx = imin-1;
-                        }
+                        uint32_t const sibling = d_children_v(parent - n_v, right_parent);
 
                         DataT sibling_data = d_internal_data_v(sibling);
-
                         functor.combine(data, sibling_data);
                         d_internal_data_v(parent) = data;
-                        d_split_idx_v(parent-n_v) = split_idx;
+
+                        d_split_idx_v(parent-n_v) = right_parent ? imax : (imin-1);
 
                         idx = parent;
-                        if (right_parent) imax = d_range_max_v(parent-n_v);
-                        else              imin = d_range_min_v(parent-n_v);
+                        imin = d_range_v(parent-n_v, 0);
+                        imax = d_range_v(parent-n_v, 1);
                     } else {
                         // Terminate thread
                         break;

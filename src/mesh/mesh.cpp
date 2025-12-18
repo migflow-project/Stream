@@ -77,7 +77,7 @@ namespace stream::mesh {
 
             // Only first thread initialize the infinity nodes
             if (tid == 0) {
-                constexpr fp_tt const L = 1e4f;
+                constexpr fp_tt const L = 1e1f;
                 VecT const avg = 0.5f*(d_bb_glob->pmax + d_bb_glob->pmin);
                 VecT const ext = d_bb_glob->pmax - d_bb_glob->pmin;
                 d_coords_m_v;
@@ -367,10 +367,8 @@ namespace stream::mesh {
 
         AvaView<uint32_t, -1> d_root_v = lbvh.d_root->template to_view<-1>();
         AvaView<uint32_t, -1> d_split_idx_v = lbvh.d_split_idx->template to_view<-1>();
-        AvaView<uint32_t, -1> d_child_left_v = lbvh.d_child_left->template to_view<-1>();
-        AvaView<uint32_t, -1> d_child_right_v = lbvh.d_child_right->template to_view<-1>();
-        AvaView<uint32_t, -1> d_range_max_v = lbvh.d_range_max->template to_view<-1>();
-        AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->template to_view<-1>();
+        AvaView<uint32_t, -1, 2> d_children_v = lbvh.d_children->template to_view<-1, 2>();
+        AvaView<uint32_t, -1, 2> d_range_v = lbvh.d_range->template to_view<-1, 2>();
         AvaView<uint64_t, -1> d_morton_v = lbvh.d_morton_sorted->template to_view<-1>();
         AvaView<BBoxT, -1>    d_bb_glob_v = lbvh.d_bb_glob->template to_view<-1>();
         AvaView<BBoxT, -1>    d_bboxes_v = lbvh.d_internal_data->template to_view<-1>();
@@ -380,8 +378,6 @@ namespace stream::mesh {
         ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
             // Fit the bboxes of the nodes
             BBoxT bb = d_bb_glob_v(0);
-            uint32_t range_min;
-            uint32_t range_max;
 
             uint32_t cur = d_root_v(0);
             bool leaf_reached = false;
@@ -391,23 +387,14 @@ namespace stream::mesh {
                 uint32_t const split_bit_idx = __builtin_clzll(d_morton_v(split_idx) ^ d_morton_v(split_idx+1));
                 uint32_t const split_axis = (split_bit_idx+(dim-1)) % dim;
 
-                uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
+                uint32_t const children[2] = {d_children_v(cur-n_nodes_v, 0), d_children_v(cur-n_nodes_v, 1)};
 
                 // Get the split coordinate
                 fp_tt const split_coord = 0.5f * (d_bboxes_v(children[0]).pmax[split_axis] + d_bboxes_v(children[1]).pmin[split_axis]);
 
                 // Only visit the subtree containing this point
                 uint32_t child_id = children[tid > split_idx];
-
-                // Recompute min/max/is_leaf in case we changed child
                 bool const is_leaf = (child_id < n_nodes_v);
-                if (!is_leaf) {
-                    range_min = d_range_min_v(child_id-n_nodes_v);
-                    range_max = d_range_max_v(child_id-n_nodes_v);
-                } else {
-                    range_min = child_id;
-                    range_max = child_id;
-                }
 
                 if (child_id == children[0]) {
                     bb.pmax[split_axis] = split_coord;
@@ -415,14 +402,13 @@ namespace stream::mesh {
                     bb.pmin[split_axis] = split_coord;
                 }
 
-                if (!is_leaf) {
-                    // Store the corresponding bounding box 
-                    d_boxes_v(child_id) = bb;
+                // A single thread stores the corresponding bounding box
+                if (is_leaf || d_range_v(child_id - n_nodes_v, 0) == tid) d_boxes_v(child_id) = bb;
 
+                if (!is_leaf) {
                     // Recurse if tid is in the subtree
                     cur = child_id;
                 } else {  // The child is a leaf : compute
-                    d_boxes_v(child_id) = bb;
                     leaf_reached = true;
                 }
             }
@@ -471,11 +457,11 @@ namespace stream::mesh {
             while (stack.len != 0) {
                 uint32_t const cur = stack.peek();
                 stack.pop();
-                uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
 
                 #pragma unroll 2
                 for (int ichild = 0; ichild < 2; ichild++){
-                    uint32_t const child_id = children[ichild];
+                    uint32_t const child_id = d_children_v(cur-n_nodes_v, ichild); 
+
                     BBoxT const bbnode = d_boxes_v(child_id);
 
                     bool is_neighbor = true;
@@ -488,13 +474,11 @@ namespace stream::mesh {
                         // We admit that the bounding box of the leaf is either 
                         // inside or touching the bounding box of the internal node
 
-                        if (is_neighbor) {
-                            stack.push(child_id);
-                        }
+                        stack.push(child_id);
                     } else {  // The child is a leaf : compute
                         if (child_id >= n_nodes_v) {
-                            range_min = d_range_min_v(child_id-n_nodes_v);
-                            range_max = d_range_max_v(child_id-n_nodes_v);
+                            range_min = d_range_v(child_id-n_nodes_v, 0);
+                            range_max = d_range_v(child_id-n_nodes_v, 1);
                         } else {
                             range_min = child_id;
                             range_max = child_id;
@@ -579,10 +563,8 @@ namespace stream::mesh {
         AvaView<uint8_t, -1> d_node_is_complete_v = d_node_is_complete->to_view<-1>();
 
         AvaView<uint32_t, -1> d_root_v = lbvh.d_root->template to_view<-1>();
-        AvaView<uint32_t, -1> d_child_left_v = lbvh.d_child_left->template to_view<-1>();
-        AvaView<uint32_t, -1> d_child_right_v = lbvh.d_child_right->template to_view<-1>();
-        AvaView<uint32_t, -1> d_range_max_v = lbvh.d_range_max->template to_view<-1>();
-        AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->template to_view<-1>();
+        AvaView<uint32_t, -1, 2> d_children_v = lbvh.d_children->template to_view<-1, 2>();
+        AvaView<uint32_t, -1, 2> d_range_v = lbvh.d_range->template to_view<-1, 2>();
         AvaView<BBoxT, -1> d_internal_data_v = lbvh.d_internal_data->template to_view<-1>();
 
 
@@ -675,11 +657,10 @@ namespace stream::mesh {
 
                         stack.pop();
 
-                        uint32_t const children[2] = {d_child_left_v(cur-n_nodes_v), d_child_right_v(cur-n_nodes_v)};
 
                         #pragma unroll 2
                         for (int ichild = 0; ichild < 2; ichild++){
-                            uint32_t const child_id = children[ichild];
+                            uint32_t const child_id = d_children_v(cur-n_nodes_v, ichild);
                             bool const is_leaf = (child_id < n_nodes_v);
 
                             if (!is_leaf) {
