@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ctime>
+#include <vector>
 #include "ava_device_array.h"
 #include "ava_host_array.h"
 #include "ava_host_array.hpp"
@@ -76,37 +77,38 @@ namespace stream::mesh {
 
             // Only first thread initialize the infinity nodes
             if (tid == 0) {
+                constexpr fp_tt const L = 1e4f;
                 VecT const avg = 0.5f*(d_bb_glob->pmax + d_bb_glob->pmin);
-                VecT const range = d_bb_glob->pmax - d_bb_glob->pmin;
+                VecT const ext = d_bb_glob->pmax - d_bb_glob->pmin;
                 d_coords_m_v;
                 n_points_v;
 
                 if constexpr (dim == 2) {
-                    fp_tt const max_range = std::fmax(range[0], range[1]);
+                    fp_tt const max_range = std::fmax(ext[0], ext[1]) + L;
 
                     // Bottom left
-                    d_coords_m_v(n_points_v) = {avg[0] - 2*max_range, avg[1] - 2*max_range};
+                    d_coords_m_v(n_points_v) = {avg[0] - max_range, avg[1] - max_range};
 
                     // Bottom right
-                    d_coords_m_v(n_points_v+1) = {avg[0] + 2*max_range, avg[1] - 2*max_range};
+                    d_coords_m_v(n_points_v+1) = {avg[0] + max_range, avg[1] - max_range};
 
                     // Top
-                    d_coords_m_v(n_points_v+2) = {avg[0], avg[1] + 2*max_range};
+                    d_coords_m_v(n_points_v+2) = {avg[0], avg[1] + max_range};
 
                 } else {
-                    fp_tt const max_range = std::fmax(range[0], std::fmax(range[1], range[2]));
+                    fp_tt const max_range = std::fmax(ext[0], std::fmax(ext[1], ext[2])) + L;
 
                     // First vertex of base
-                    d_coords_m_v(n_points_v) = {avg[0] - 2*max_range, avg[1] - 2*max_range, avg[2] - 2*max_range};
+                    d_coords_m_v(n_points_v) = {avg[0] - max_range, avg[1] - max_range, avg[2] - max_range};
 
                     // Second vertex of base
-                    d_coords_m_v(n_points_v + 1) = {avg[0] + 2*max_range, avg[1] - 2*max_range, avg[2] - 2*max_range};
+                    d_coords_m_v(n_points_v + 1) = {avg[0] + max_range, avg[1] - max_range, avg[2] - max_range};
 
                     // Third vertex of base
-                    d_coords_m_v(n_points_v + 2) = {avg[0] + 2*max_range, avg[1] + 2*max_range, avg[2] - 2*max_range};
+                    d_coords_m_v(n_points_v + 2) = {avg[0] + max_range, avg[1] + max_range, avg[2] - max_range};
 
                     // Top vertex
-                    d_coords_m_v(n_points_v + 3) = {avg[0], avg[1], avg[2] + 2*max_range};
+                    d_coords_m_v(n_points_v + 3) = {avg[0], avg[1], avg[2] + max_range};
                 }
             }
 
@@ -399,7 +401,7 @@ namespace stream::mesh {
 
                 // Recompute min/max/is_leaf in case we changed child
                 bool const is_leaf = (child_id < n_nodes_v);
-                if (child_id >= n_nodes_v) {
+                if (!is_leaf) {
                     range_min = d_range_min_v(child_id-n_nodes_v);
                     range_max = d_range_max_v(child_id-n_nodes_v);
                 } else {
@@ -420,13 +422,35 @@ namespace stream::mesh {
                     // Recurse if tid is in the subtree
                     cur = child_id;
                 } else {  // The child is a leaf : compute
-                    for (uint32_t obj_id = range_min; obj_id <= range_max; obj_id++){
-                        d_boxes_v(obj_id) = bb;
-                    }
+                    d_boxes_v(child_id) = bb;
                     leaf_reached = true;
                 }
             }
         });
+
+        // std::vector<BBoxT> h_bboxes(n_nodes_v);
+        // gpu_memcpy(h_bboxes.data(), d_boxes->data, sizeof(BBoxT)*n_nodes_v, gpu_memcpy_device_to_host);
+        //
+        // std::vector<VecT> h_nodes(n_nodes_v);
+        // gpu_memcpy(h_nodes.data(), lbvh.d_obj_m->data, sizeof(VecT)*n_nodes_v, gpu_memcpy_device_to_host);
+        //
+        // FILE* fbb = fopen("bb.txt", "w");
+        // for (uint32_t i = 0; i < n_nodes_v; i++){
+        //     fprintf(fbb, "%.5f %.5f %.5f %.5f\n", 
+        //             h_bboxes[i].min(0),
+        //             h_bboxes[i].min(1),
+        //             h_bboxes[i].max(0),
+        //             h_bboxes[i].max(1));
+        // }
+        // fclose(fbb);
+        //
+        // FILE* fnodes = fopen("nodes.txt", "w");
+        // for (uint32_t i = 0; i < n_nodes_v; i++){
+        //     fprintf(fnodes, "%.5f %.5f\n", 
+        //             h_nodes[i][0],
+        //             h_nodes[i][1]);
+        // }
+        // fclose(fnodes);
 
         ava_for<32>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
