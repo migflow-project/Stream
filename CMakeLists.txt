@@ -42,6 +42,8 @@ set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/stream" 
 
 option(ENABLE_TESTS "Compile tests" OFF)
 option(ENABLE_CUDA "Compile with CUDA" ON)
+option(ENABLE_TRIANGLE_REDUNDANCY "When set, every node will compute ALL incident simplices" OFF)
+
 set(ENABLE_ARCH "native" CACHE STRING "Target architecture. E.g. 89 for CUDA compilation or armv8-a for CPU compilation. Default=native")
 
 if (ENABLE_CUDA)
@@ -88,6 +90,10 @@ endforeach()
 
 
 target_link_libraries(mesh PUBLIC geometry)
+
+if (ENABLE_TRIANGLE_REDUNDANCY) 
+    target_compile_definitions(TRIANGLE_REDUNDANCY)
+endif()
 
 # ============================= Add directories ===============================
 add_subdirectory(include/)       # Library includes and interface
