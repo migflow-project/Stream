@@ -72,8 +72,10 @@ namespace stream::mesh {
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
         AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
         BBoxT const * const __restrict__ d_bb_glob = lbvh.d_bb_glob->data;
-        TriLoc tloc = get_triloc_struct();
+        TriLoc tloc_v = get_triloc_struct();
         ava_for<256>(nullptr, 0, n_nodes, [=] __device__ (int const tid) {
+
+            TriLoc tloc = tloc_v.thread_init(tid);
 
             // Only first thread initialize the infinity nodes
             if (tid == 0) {
@@ -113,32 +115,31 @@ namespace stream::mesh {
             }
 
             // Initialize local triangulation
-            uint32_t const elem_start   = tloc.get_elem_offset(tid); 
             d_node_nelemloc_v(tid) = n_init_elem;
             d_node_nneigloc_v(tid) = n_inf_nodes;
             //  ================ Init cell ===================
 
             if constexpr (dim==2) {
                 // Top left triangle
-                tloc.get_elem(elem_start, 0) = {1, 2};
+                tloc.get_elem(0) = {1, 2};
 
                 // Top right
-                tloc.get_elem(elem_start, 1) = {2, 0};
+                tloc.get_elem(1) = {2, 0};
 
                 // Bottom right
-                tloc.get_elem(elem_start, 2) = {0, 1};
+                tloc.get_elem(2) = {0, 1};
             } else {
                 // bottom tet
-                tloc.get_elem(elem_start, 0) = {0, 2, 1};
+                tloc.get_elem(0) = {0, 2, 1};
 
                 // tet facing you
-                tloc.get_elem(elem_start, 1) = {1, 2, 3};
+                tloc.get_elem(1) = {1, 2, 3};
 
                 // left tet
-                tloc.get_elem(elem_start, 2) = {0, 1, 3};
+                tloc.get_elem(2) = {0, 1, 3};
 
                 // right tet
-                tloc.get_elem(elem_start, 3) = {0, 3, 2};
+                tloc.get_elem(3) = {0, 3, 2};
             }
         });
     }
@@ -148,16 +149,15 @@ namespace stream::mesh {
 
         uint32_t const n_nodes_v = n_nodes;
 
-        TriLoc tloc = get_triloc_struct();
+        TriLoc tloc_v = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
         AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
 
         ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
-            // Get offsets of neighbors and triangles in the blocks
-            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
-            uint32_t const elem_offset  = tloc.get_elem_offset(tid); 
+            // Init local triangulation for this thread
+            TriLoc tloc = tloc_v.thread_init(tid);
 
             // Get the range of morton neighbors to insert. Take care of 
             // edge cases to ensure all nodes insert the same amount.
@@ -182,7 +182,7 @@ namespace stream::mesh {
                 uint32_t cur_neig_glob = insert_start_range + ni;
                 if (cur_neig_glob == tid) continue; // Do not insert the node itself
 
-                tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
+                tloc.set_neig(cur_neig_loc) = cur_neig_glob;
 
                 // 256-bits bitset to indicate if i-th neighbor is in the cavity
                 // of the inserted point
@@ -194,11 +194,11 @@ namespace stream::mesh {
                 ti = 0;
                 while (ti < Tlast) {
                     // Get local triangle made by tid and two neighbors
-                    LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+                    LocalElem const elem_loc = tloc.get_elem(ti);
 
                     uint32_t i1 = tid;
-                    uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
-                    uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
+                    uint32_t i2 = tloc.get_neig(elem_loc.a);
+                    uint32_t i3 = tloc.get_neig(elem_loc.b);
                     uint32_t i4 = cur_neig_glob;
                     
                     fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
@@ -214,7 +214,7 @@ namespace stream::mesh {
 
                         // Remove T[ti] from T
                         Tlast--;
-                        tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
+                        tloc.get_elem(ti) = tloc.get_elem(Tlast);
                     } else {
                         ti++;
                     }
@@ -225,125 +225,7 @@ namespace stream::mesh {
                     // Special case for 2D : there are only 2 elements in neig_in_cavity
                     for (uint8_t r = 0; r < cur_neig_loc; r++){
                         if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
-                            tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
-                            Tlast++;
-                        }
-                    }
-                    cur_neig_loc++;
-                } 
-            }
-
-            d_node_nelemloc_v(tid) = Tlast;
-            d_node_nneigloc_v(tid) = cur_neig_loc;
-        });
-    }
-
-    template<int dim, uint32_t block_size>
-    void Mesh<dim, block_size>::insert_quadrant_neighbors() {
-
-        uint32_t const n_nodes_v = n_nodes;
-
-        TriLoc tloc = get_triloc_struct();
-        AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
-        AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
-        AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
-
-        ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
-
-            // Get offsets of neighbors and triangles in the blocks
-            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
-            uint32_t const elem_offset  = tloc.get_elem_offset(tid); 
-
-            // Find one point in each quadrant around the node
-            VecT const p1 = d_nodes_m_v(tid);
-            uint32_t to_insert[8] = {
-                tid, tid, tid, tid,
-                tid, tid, tid, tid
-            };
-            fp_tt dist[8] = {
-                FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX,
-                FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX
-            };
-            uint32_t const start = (tid > 32) ? tid - 32 : 0;
-            uint32_t const end = (tid + 32 < n_nodes_v) ? tid + 32 : n_nodes_v;
-            for (uint32_t i = start; i < end; i++) {
-                if (i == tid) continue;
-                VecT const p2  = d_nodes_m_v(i);
-                fp_tt const d2 = (p1 - p2).sqnorm();
-
-                // Get the quadrant in which p2 is located w.r.t p1
-                uint32_t const id = ((p2[0] > p1[0]) << 1) | (p2[1] > p1[1]);
-                if (d2 < dist[2*id]) {
-                    to_insert[2*id] = i;
-                    dist[2*id] = d2;
-
-                    if (d2 < dist[2*id+1]) {
-                        uint32_t tmp = to_insert[2*id+1];
-                        to_insert[2*id+1] = i;
-                        to_insert[2*id] = tmp;
-
-                        fp_tt tmp_f = dist[2*id+1];
-                        dist[2*id+1] = d2;
-                        dist[2*id] = tmp_f;
-                    }  
-                }
-            }
-
-
-            uint32_t Tlast = d_node_nelemloc_v(tid);
-            uint32_t cur_neig_loc = d_node_nneigloc_v(tid);
-
-            for (uint32_t ni = 0; ni < 8; ni++) {
-
-                // Get local/global indices of neighbor
-                uint32_t cur_neig_glob = to_insert[ni];
-                if (cur_neig_glob == tid) continue; // Do not insert the node itself
-
-                tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
-
-
-                // 256-bits bitset to indicate if i-th neighbor is in the cavity
-                // of the inserted point
-                uint64_t neig_in_cavity[4] = {0, 0, 0, 0};
-
-                // Look at every triangle in the triangulation and add it to the 
-                // cavity if the inserted point is inside its circumcircle
-                uint32_t cavity_size = 0;
-                uint32_t ti = 0;
-                while (ti < Tlast) {
-                    // Get local triangle made by tid and two neighbors
-                    LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
-
-                    uint32_t i1 = tid;
-                    uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
-                    uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
-                    uint32_t i4 = cur_neig_glob;
-                    
-                    fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
-
-                    // If the inserted point is in the circumcircle of the triangle, 
-                    // add the triangle's edges to the cavity and remove it from the local 
-                    // triangulation
-                    if (det > 0.0f) {
-                        // Add T[ti] to the used edges
-                        neig_in_cavity[elem_loc.a >> 6] ^= 1ULL << (elem_loc.a & 63);
-                        neig_in_cavity[elem_loc.b >> 6] ^= 1ULL << (elem_loc.b & 63);
-                        cavity_size++;
-
-                        // Remove T[ti] from T
-                        Tlast--;
-                        tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
-                    } else {
-                        ti++;
-                    }
-                }
-
-                if (cavity_size) {
-                    // If the cavity is not empty, retriangulate the cavity
-                    // Special case for 2D : there are only 2 elements in neig_in_cavity
-                    for (uint8_t r = 0; r < cur_neig_loc; r++){
-                        if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
-                            tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
+                            tloc.get_elem(Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
                             Tlast++;
                         }
                     }
@@ -360,7 +242,7 @@ namespace stream::mesh {
     void Mesh<dim, block_size>::insert_BVH_neighbors() {
         uint32_t const n_nodes_v = n_nodes;
 
-        TriLoc tloc = get_triloc_struct();
+        TriLoc tloc_v = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
         AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
@@ -440,9 +322,8 @@ namespace stream::mesh {
 
         ava_for<32>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
-            // Get offsets of neighbors and triangles in the blocks
-            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
-            uint32_t const elem_offset = tloc.get_elem_offset(tid); 
+            // Init local triangulation for this thread
+            TriLoc tloc = tloc_v.thread_init(tid);
 
             uint32_t Tlast = d_node_nelemloc_v(tid);
             uint32_t cur_neig_loc = d_node_nneigloc_v(tid);
@@ -490,7 +371,7 @@ namespace stream::mesh {
 
                             // insert node
                             uint32_t const cur_neig_glob = obj_id;
-                            tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
+                            tloc.set_neig(cur_neig_loc) = cur_neig_glob;
 
                             // 256-bits bitset to indicate if i-th neighbor is in the cavity
                             // of the inserted point
@@ -503,11 +384,11 @@ namespace stream::mesh {
                             uint32_t ti = 0;
                             while (ti < Tlast) {
                                 // Get local triangle made by tid and two neighbors
-                                LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+                                LocalElem const elem_loc = tloc.get_elem(ti);
 
                                 uint32_t i1 = tid;
-                                uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
-                                uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
+                                uint32_t i2 = tloc.get_neig(elem_loc.a);
+                                uint32_t i3 = tloc.get_neig(elem_loc.b);
                                 uint32_t i4 = cur_neig_glob;
 
                                 fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
@@ -523,7 +404,7 @@ namespace stream::mesh {
 
                                     // Remove T[ti] from T
                                     Tlast--;
-                                    tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
+                                    tloc.get_elem(ti) = tloc.get_elem(Tlast);
                                 } else {
                                     ti++;
                                 }
@@ -533,7 +414,7 @@ namespace stream::mesh {
                                 // If the cavity is not empty, retriangulate the cavity
                                 for (uint8_t r = 0; r < cur_neig_loc; r++){
                                     if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
-                                        tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
+                                        tloc.get_elem(Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
                                         Tlast++;
                                     }
                                 }
@@ -556,7 +437,7 @@ namespace stream::mesh {
         uint32_t const n_nodes_v = n_nodes;
         uint32_t const cur_max_nneig_v = cur_max_nneig;
 
-        TriLoc tloc = get_triloc_struct();
+        TriLoc tloc_v = get_triloc_struct();
         AvaView<VecT, -1> d_nodes_m_v = lbvh.d_obj_m->template to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
         AvaView<uint32_t, -1> d_node_nneigloc_v = d_node_nneigloc->to_view<-1>();
@@ -596,9 +477,8 @@ namespace stream::mesh {
                 uint32_t const node_id = d_unfinished_nodes_v(tid);
                 d_node_is_complete_v(tid) = true;
 
-                // Get offsets of neighbors and triangles in the blocks
-                uint32_t const neig_offset = tloc.get_neig_offset(node_id); 
-                uint32_t const elem_offset  = tloc.get_elem_offset(node_id); 
+                // Init local triangulation for this thread
+                TriLoc tloc = tloc_v.thread_init(node_id);
 
                 // get the number of local element after morton neighbors insertion
                 uint32_t Tlast = d_node_nelemloc_v(node_id); 
@@ -612,10 +492,10 @@ namespace stream::mesh {
                 // a given element, it is globally Delaunay.
                 for (uint32_t elem_test = non_delaunay_start_idx; elem_test < Tlast; elem_test++){
                     // Get the element
-                    LocalElem elem_loc = tloc.get_elem(elem_offset, elem_test);
+                    LocalElem elem_loc = tloc.get_elem(elem_test);
                     uint32_t neig[2] = {
-                        tloc.get_neig(neig_offset, elem_loc.a),
-                        tloc.get_neig(neig_offset, elem_loc.b),
+                        tloc.get_neig(elem_loc.a),
+                        tloc.get_neig(elem_loc.b),
                     };
 
                     cur_neig_glob = node_id;
@@ -708,8 +588,8 @@ namespace stream::mesh {
                         // If no node where found, the element is Delaunay
                         // and we can mark it as such to not use it during the 
                         // retriangulation phase
-                        tloc.get_elem(elem_offset, elem_test) = std::move(tloc.get_elem(elem_offset, non_delaunay_start_idx));
-                        tloc.get_elem(elem_offset, non_delaunay_start_idx) = elem_loc;
+                        tloc.get_elem(elem_test) = std::move(tloc.get_elem(non_delaunay_start_idx));
+                        tloc.get_elem(non_delaunay_start_idx) = elem_loc;
                         non_delaunay_start_idx++;
                     }
                 }
@@ -777,9 +657,7 @@ namespace stream::mesh {
             ava_for<32>(nullptr, 0, n_unfinished_nodes, [=] __device__ (uint32_t const tid) {
                     uint32_t const node_id = d_unfinished_nodes_v(tid);
 
-                    // Get offsets of neighbors and triangles in the blocks
-                    uint32_t const neig_offset = tloc.get_neig_offset(node_id); 
-                    uint32_t const elem_offset = tloc.get_elem_offset(node_id); 
+                    TriLoc tloc = tloc_v.thread_init(node_id);
 
                     // get the number of local element after morton neighbors insertion
                     uint32_t Tlast = d_node_nelemloc_v(node_id); 
@@ -787,7 +665,7 @@ namespace stream::mesh {
                     uint32_t cur_neig_glob = d_node_to_insert_v(node_id);
                     uint32_t cur_neig_loc = d_node_nneigloc_v(node_id);
 
-                    tloc.set_neig(neig_offset, cur_neig_loc) = cur_neig_glob;
+                    tloc.set_neig(cur_neig_loc) = cur_neig_glob;
 
                     // 256-bits bitset to indicate if i-th neighbor is in the cavity
                     // of the inserted point
@@ -799,11 +677,11 @@ namespace stream::mesh {
                     uint32_t cavity_size = 0;
                     while (ti < Tlast) {
                         // Get local triangle made by tid and two neighbors
-                        LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+                        LocalElem const elem_loc = tloc.get_elem(ti);
 
                         uint32_t i1 = node_id;
-                        uint32_t i2 = tloc.get_neig(neig_offset, elem_loc.a);
-                        uint32_t i3 = tloc.get_neig(neig_offset, elem_loc.b);
+                        uint32_t i2 = tloc.get_neig(elem_loc.a);
+                        uint32_t i3 = tloc.get_neig(elem_loc.b);
                         uint32_t i4 = cur_neig_glob;
 
                         fp_tt const det = incircle_SoS(i1, i2, i3, i4, d_nodes_m_v);
@@ -819,7 +697,7 @@ namespace stream::mesh {
 
                             // Remove T[ti] from T
                             Tlast--;
-                            tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
+                            tloc.get_elem(ti) = tloc.get_elem(Tlast);
                         } else {
                             ti++;
                         }
@@ -829,7 +707,7 @@ namespace stream::mesh {
                         // If the cavity is not empty, retriangulate the cavity
                         for (uint8_t r = 0; r < cur_neig_loc; r++){
                             if (neig_in_cavity[r >> 6] & (1ULL << (r & 63))) {
-                                tloc.get_elem(elem_offset, Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
+                                tloc.get_elem(Tlast) = {(uint8_t) r, (uint8_t) cur_neig_loc};
                                 Tlast++;
                             }
                         }
@@ -854,15 +732,14 @@ namespace stream::mesh {
 
         uint32_t const n_nodes_v = n_nodes;
 
-        TriLoc tloc = get_triloc_struct();
+        TriLoc tloc_v = get_triloc_struct();
         AvaView<uint32_t, -1> d_node_nelemloc_v = d_node_nelemloc->to_view<-1>();
         AvaView<uint32_t, -1> d_node_nelem_out_v = d_node_nelem_out->to_view<-1>();
 
         ava_for<256>(nullptr, 0, n_nodes_v, [=] __device__ (uint32_t const tid) {
 
-            // Get offsets of neighbors and triangles in the blocks
-            uint32_t const neig_offset = tloc.get_neig_offset(tid); 
-            uint32_t const elem_offset  = tloc.get_elem_offset(tid); 
+            // Init local triangulation for this thread
+            TriLoc tloc = tloc_v.thread_init(tid); 
 
             // get the number of local element after insertion
             uint32_t Tlast = d_node_nelemloc_v(tid); 
@@ -873,17 +750,17 @@ namespace stream::mesh {
             uint8_t nelem_out_loc = 0;
             uint8_t nelem_loc = 0;
             while (ti < Tlast) {
-                LocalElem const elem_loc = tloc.get_elem(elem_offset, ti);
+                LocalElem const elem_loc = tloc.get_elem(ti);
 
                 if (elem_loc.a < n_inf_nodes || elem_loc.b < n_inf_nodes) {
                     Tlast--;
-                    tloc.get_elem(elem_offset, ti) = tloc.get_elem(elem_offset, Tlast);
+                    tloc.get_elem(ti) = tloc.get_elem(Tlast);
                     continue;
                 }
 
                 uint32_t const neig[2] = {
-                    tloc.get_neig(neig_offset, elem_loc.a),
-                    tloc.get_neig(neig_offset, elem_loc.b),
+                    tloc.get_neig(elem_loc.a),
+                    tloc.get_neig(elem_loc.b),
                 };
 
                 nelem_loc++;
@@ -920,20 +797,19 @@ namespace stream::mesh {
         gpu_memcpy(&n_elems, d_node_nelem_out->data + n_nodes, sizeof(n_elems), gpu_memcpy_device_to_host);
         d_elemglob->resize({(int) n_elems});
 
-        TriLoc const tloc = get_triloc_struct();
+        TriLoc const tloc_v = get_triloc_struct();
         AvaView<uint32_t, -1> d_node_nelem_out_v = d_node_nelem_out->to_view<-1>();
         AvaView<Elem, -1> d_elemglob_v = d_elemglob->template to_view<-1>();
         ava_for<256>(nullptr, 0, n_nodes, [=] __device__(uint32_t const tid) {
-            uint32_t const neig_offset = tloc.get_neig_offset(tid);
-            uint32_t const elem_offset = tloc.get_elem_offset(tid); 
+            TriLoc tloc = tloc_v.thread_init(tid);
             uint32_t triIdx = 0;
             for (uint32_t i = d_node_nelem_out_v(tid); i < d_node_nelem_out_v(tid+1); i++){
                 LocalElem tricur;
                 uint32_t neig[2];
                 do {
-                    tricur = tloc.get_elem(elem_offset, triIdx);
-                    neig[0] = tloc.get_neig(neig_offset, tricur.a); 
-                    neig[1] = tloc.get_neig(neig_offset, tricur.b);
+                    tricur = tloc.get_elem(triIdx);
+                    neig[0] = tloc.get_neig(tricur.a); 
+                    neig[1] = tloc.get_neig(tricur.b);
                     triIdx++;
                 } while (neig[0] < tid || neig[1] < tid);
 
@@ -977,11 +853,6 @@ void Mesh2D_init(Mesh2D * const mesh) {
 // Insert a few morton neighbors in the local triangulation
 void Mesh2D_insert_morton_neighbors(Mesh2D * const mesh) {
     mesh->insert_morton_neighbors();
-}
-
-// Insert 2 nodes per quadrant around the root node in the local triangulation
-void Mesh2D_insert_quadrant_neighbors(Mesh2D * const mesh) {
-    mesh->insert_quadrant_neighbors();
 }
 
 // Insert all the leaves of the BVH that are adjaccent to the leaf of 

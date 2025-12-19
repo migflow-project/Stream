@@ -15,11 +15,11 @@ mesh2D_destroy.restype = None
 mesh2D_destroy.argtypes = [mesh2D_ptr]
 
 mesh2D_set_nodes = libmesh.Mesh2D_set_nodes
-mesh2D_set_nodes.restype = None 
+mesh2D_set_nodes.restype = None
 mesh2D_set_nodes.argtypes = [
-    mesh2D_ptr, 
+    mesh2D_ptr,
     ctypes.c_uint32,
-    np.ctypeslib.ndpointer(dtype=np.float32, ndim=2, flags=("C", "ALIGNED")) 
+    np.ctypeslib.ndpointer(dtype=np.float32, ndim=2, flags=("C", "ALIGNED"))
 ]
 
 mesh2D_init = libmesh.Mesh2D_init
@@ -29,10 +29,6 @@ mesh2D_init.argtypes = [mesh2D_ptr]
 mesh2D_insert_morton_neighbors = libmesh.Mesh2D_insert_morton_neighbors
 mesh2D_insert_morton_neighbors.restype = None
 mesh2D_insert_morton_neighbors.argtypes = [mesh2D_ptr]
-
-mesh2D_insert_quadrant_neighbors = libmesh.Mesh2D_insert_quadrant_neighbors
-mesh2D_insert_quadrant_neighbors.restype = None
-mesh2D_insert_quadrant_neighbors.argtypes = [mesh2D_ptr]
 
 mesh2D_insert_BVH_neighbors = libmesh.Mesh2D_insert_BVH_neighbors
 mesh2D_insert_BVH_neighbors.restype = None
@@ -54,15 +50,18 @@ mesh2D_get_elem = libmesh.Mesh2D_get_elem
 mesh2D_get_elem.restype = None
 mesh2D_get_elem.argtypes = [
     mesh2D_ptr,
-    np.ctypeslib.ndpointer(dtype=np.uint32, ndim=2, flags=("C", "ALIGNED", "WRITEABLE")) 
+    np.ctypeslib.ndpointer(dtype=np.uint32, ndim=2,
+                           flags=("C", "ALIGNED", "WRITEABLE"))
 ]
 
 mesh2D_get_ordered_nodes = libmesh.Mesh2D_get_ordered_nodes
 mesh2D_get_ordered_nodes.restype = None
 mesh2D_get_ordered_nodes.argtypes = [
     mesh2D_ptr,
-    np.ctypeslib.ndpointer(dtype=np.float32, ndim=2, flags=("C", "ALIGNED", "WRITEABLE")) 
+    np.ctypeslib.ndpointer(dtype=np.float32, ndim=2,
+                           flags=("C", "ALIGNED", "WRITEABLE"))
 ]
+
 
 class Mesh2D:
 
@@ -76,7 +75,7 @@ class Mesh2D:
     def init(self) -> None:
         mesh2D_init(self.mesh)
 
-    def set_nodes(self, nodes : npt.NDArray[np.float32]) -> None:
+    def set_nodes(self, nodes: npt.NDArray[np.float32]) -> None:
         nodes = nodes.astype(np.float32)
         self.nnodes = nodes.shape[0]
         mesh2D_set_nodes(self.mesh, self.nnodes, nodes)
@@ -84,9 +83,6 @@ class Mesh2D:
 
     def insert_morton_neighbors(self) -> None:
         mesh2D_insert_morton_neighbors(self.mesh)
-
-    def insert_quadrant_neighbors(self) -> None:
-        mesh2D_insert_quadrant_neighbors(self.mesh)
 
     def insert_BVH_neighbors(self) -> None:
         mesh2D_insert_BVH_neighbors(self.mesh)
