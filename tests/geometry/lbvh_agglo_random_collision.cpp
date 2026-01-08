@@ -76,10 +76,8 @@ int main(int argc, char** argv){
         timespec_get(&t0, TIME_UTC);
 
         AvaView<Sphere2D, -1> d_obj_m_v = lbvh.d_obj_m->to_view<-1>();
-        AvaView<uint32_t, -1> d_child_right_v = lbvh.d_child_right->to_view<-1>();
-        AvaView<uint32_t, -1> d_child_left_v = lbvh.d_child_left->to_view<-1>();
-        AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->to_view<-1>();
-        AvaView<uint32_t, -1> d_range_max_v = lbvh.d_range_max->to_view<-1>();
+        AvaView<uint32_t, -1, 2> d_children_v = lbvh.d_children->to_view<-1, 2>();
+        AvaView<uint32_t, -1, 2> d_range_v = lbvh.d_range->to_view<-1, 2>();
         AvaView<uint32_t, -1> d_root_v = lbvh.d_root->to_view<-1>();
         AvaView<BBox2f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
         uint32_t const n_v = n;
@@ -98,13 +96,12 @@ int main(int argc, char** argv){
             // DFS
             while (stack_size != 0) {
                 uint32_t const cur = stack[--stack_size];
-                uint32_t children[2] = {d_child_left_v(cur-n_v), d_child_right_v(cur-n_v)};
 
                 for (int ichild = 0; ichild < 2; ichild++){
-                    uint32_t const child_id = children[ichild];
+                    uint32_t const child_id = d_children_v(cur-n_v, ichild); 
                     if (child_id >= n_v) {
-                        range_min = d_range_min_v(child_id-n_v);
-                        range_max = d_range_max_v(child_id-n_v);
+                        range_min = d_range_v(child_id-n_v, 0);
+                        range_max = d_range_v(child_id-n_v, 1);
                     } else {
                         range_min = child_id;
                         range_max = child_id;
@@ -165,10 +162,8 @@ int main(int argc, char** argv){
     timespec_get(&t0, TIME_UTC);
 
     AvaView<Sphere2D, -1> d_obj_m_v = lbvh.d_obj_m->to_view<-1>();
-    AvaView<uint32_t, -1> d_child_right_v = lbvh.d_child_right->to_view<-1>();
-    AvaView<uint32_t, -1> d_child_left_v = lbvh.d_child_left->to_view<-1>();
-    AvaView<uint32_t, -1> d_range_min_v = lbvh.d_range_min->to_view<-1>();
-    AvaView<uint32_t, -1> d_range_max_v = lbvh.d_range_max->to_view<-1>();
+    AvaView<uint32_t, -1, 2> d_children_v = lbvh.d_children->to_view<-1, 2>();
+    AvaView<uint32_t, -1, 2> d_range_v = lbvh.d_range->to_view<-1, 2>();
     AvaView<uint32_t, -1> d_root_v = lbvh.d_root->to_view<-1>();
     AvaView<BBox2f, -1> d_internal_data_v = lbvh.d_internal_data->to_view<-1>();
     uint32_t const n_v = n;
@@ -187,10 +182,9 @@ int main(int argc, char** argv){
         // DFS
         while (stack_size != 0) {
             uint32_t const cur = stack[--stack_size];
-            uint32_t children[2] = {d_child_left_v(cur-n_v), d_child_right_v(cur-n_v)};
 
             for (int ichild = 0; ichild < 2; ichild++){
-                uint32_t const child_id = children[ichild];
+                uint32_t const child_id = d_children_v(cur-n_v, ichild);
                 bool is_leaf = (child_id < n_v) || (stack_size >= 32);
 
                 if (!is_leaf) {
@@ -203,8 +197,8 @@ int main(int argc, char** argv){
                     if (is_in) stack[stack_size++] = child_id;
                 } else {  // The child is a leaf : compute
                     if (child_id >= n_v) {
-                        range_min = d_range_min_v(child_id-n_v);
-                        range_max = d_range_max_v(child_id-n_v);
+                        range_min = d_range_v(child_id-n_v, 0);
+                        range_max = d_range_v(child_id-n_v, 1);
                     } else {
                         range_min = child_id;
                         range_max = child_id;

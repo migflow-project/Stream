@@ -48,17 +48,16 @@ int main(void) {
     }
 
     printf("=================== Local Triangulation (per node) ================\n");
-    Mesh2D::TriLoc tloc = mesh.get_triloc_struct();
+    Mesh2D::TriLoc tloc_v = mesh.get_triloc_struct();
     for (uint32_t i = 0; i < mesh.n_nodes; i++) {
-        uint32_t const neig_offset = tloc.get_neig_offset(i); 
-        uint32_t const elem_offset  = tloc.get_elem_offset(i); 
+        Mesh2D::TriLoc tloc = tloc_v.thread_init(i);
         printf("tid = %u :\n", i);
         for (uint32_t j = 0; j < mesh.d_node_nelemloc->data[i]; j++){
-            Mesh2D::LocalElem const elem_loc = tloc.get_elem(elem_offset, j);
+            Mesh2D::LocalElem const elem_loc = tloc.get_elem(j);
             printf("\t%u-th elem : local indices : (%u, %u) <==> global indices : (%u, %u)\n", 
                     j, 
                     elem_loc.a, elem_loc.b, 
-                    tloc.get_neig(neig_offset, elem_loc.a), tloc.get_neig(neig_offset, elem_loc.b)
+                    tloc.get_neig(elem_loc.a), tloc.get_neig(elem_loc.b)
                   );
         }
     }

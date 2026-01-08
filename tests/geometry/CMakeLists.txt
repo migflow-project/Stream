@@ -1,5 +1,6 @@
 set(GEOMETRY_TESTS
     vec                             
+    trbvh_random_collision
     lbvh_simple_collision            
     lbvh_random_collision
     lbvh_random_collision3D

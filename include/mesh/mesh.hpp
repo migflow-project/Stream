@@ -45,9 +45,6 @@ extern "C" {
     // Insert a few morton neighbors in the local triangulation
     void Mesh2D_insert_morton_neighbors(Mesh2D * const mesh);
 
-    // Insert 2 nodes per quadrant around the root node in the local triangulation
-    void Mesh2D_insert_quadrant_neighbors(Mesh2D * const mesh);
-
     // Insert all the leaves of the BVH that are adjaccent to the leaf of 
     // the root node
     void Mesh2D_insert_BVH_neighbors(Mesh2D * const mesh);
@@ -164,7 +161,6 @@ namespace stream::mesh {
 
         void insert_morton_neighbors(void);
         
-        void insert_quadrant_neighbors(void);
         void insert_BVH_neighbors(void);
         void insert_by_circumsphere_checking(void);
 
@@ -196,6 +192,28 @@ namespace stream::mesh {
             AvaView<LocalElem, -1> d_node_elemloc_v;
             AvaView<uint32_t, -1> d_neig_v;
 
+            // Return a new TriLoc with memory offsets corresponding 
+            // to the start of the nodes/neighbor of this thread's local 
+            // triangulation
+            __device__ inline TriLoc thread_init(uint32_t const tid) const {
+                uint32_t const elem_offset = get_elem_offset(tid);
+                uint32_t const neig_offset = get_neig_offset(tid);
+
+                LocalElem * elem = d_node_elemloc_v.data + elem_offset;
+                uint32_t * neig = d_neig_v.data + neig_offset;
+
+                const int elem_shape[1] = {d_node_elemloc_v.dyn_shape[0]};
+                const int node_shape[1] = {d_neig_v.dyn_shape[0]};
+
+                return {
+                    n_nodes, 
+                    cur_max_nneig, 
+                    cur_max_nelem,
+                    AvaView<LocalElem, -1>(elem, elem_shape),
+                    AvaView<uint32_t, -1>(neig, node_shape)
+                };
+            }
+
             // Get the starting index of the triangle block
             __device__ inline uint32_t get_elem_offset(uint32_t const tid) const {
                 return cur_max_nelem*block_size*(tid/block_size) + tid % block_size;
@@ -208,26 +226,26 @@ namespace stream::mesh {
             };
 
             // Get the j-th triangle
-            __device__ inline LocalElem& get_elem(uint32_t const elem_offset, uint32_t const j) const {
-                return d_node_elemloc_v(elem_offset + j*block_size);
-                //                                  |row in block|
+            __device__ inline LocalElem& get_elem(uint32_t const j) const {
+                return d_node_elemloc_v(/* elem_offset +*/ j*block_size);
+                //                                         |row in block|
             };
 
             // Get the j-th local neighbor
-            __device__ inline uint32_t get_neig(uint32_t const neig_offset, uint32_t const j) const {
+            __device__ inline uint32_t get_neig(uint32_t const j) const {
                 // Infinity points are indexed as 
                 // - 0, 1, 2, (3 in dim3) locally
                 // - n_nodes + i, i=0, 1, 2, (3 in dim3) globally
                 if (j >= n_inf_nodes) {
-                    return d_neig_v(neig_offset + (j-n_inf_nodes)*block_size);
+                    return d_neig_v(/* neig_offset + */  (j-n_inf_nodes)*block_size);
                 }
                 return j + n_nodes; // Return global index of infinity point
             };
 
             // Set the j-th local neighbor
-            __device__ inline uint32_t& set_neig(uint32_t const neig_offset, uint32_t const j) const {
+            __device__ inline uint32_t& set_neig(uint32_t const j) const {
                 // Error if called on an infinity node
-                return d_neig_v(neig_offset + (j-n_inf_nodes)*block_size);
+                return d_neig_v(/* neig_offset + */ (j-n_inf_nodes)*block_size);
             };
         };
 
@@ -241,6 +259,8 @@ namespace stream::mesh {
             };
         }
 
+
+        uint32_t __device__ dig_cavity(TriLoc const& tloc, uint32_t ti, uint32_t& Tlast, AvaView<VecT, -1> d_nodes, uint64_t shell[4]);
     };
 
     template<typename T>
