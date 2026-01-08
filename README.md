@@ -112,24 +112,36 @@ niter = cg.solve_jacobi(sys, prec, x)
 ## Project Structure
 
 ```text 
-|- deps/                   # Contains dependencies               
-   |- ava/                 # Required dependency : CPU/GPU portable compilation
-|- include/                # Public include files
-   |- geometry/            # Geometry module: spatial search structures, geometric primitives...
-   |- mesh/                # Mesh module: mesh generation, mesh adaptation, size-fields...
-   |- numerics/            # Numerics module: linear system, solvers (physics AGNOSTIC)
-   |- fem/                 # fem module: matrix assembly (physics BASED)
-|- src/                    # Source code
-   |- core/
-   |- geometry/
-   |- mesh/ 
-   |- numerics/
-   |- fem/
-|- tests/                  # Tests functionalities against known results, or for performance
-   |- geometry/
-   |- mesh/ 
-   |- numerics/
-|- testcases/              # Physical testcases (e.g. Hysing, Dam break...)
-|- python/                 # Python API 
-   |- numerics/
+├── assets                # Data / scripts
+│   ├── geofiles
+│   └── scripts
+├── CMakeLists.txt
+├── Config.cmake.in
+├── deps                  # Dependency directory
+│   └── ava         
+├── include               # Public include files
+│   ├── CMakeLists.txt
+│   ├── fem             
+│   ├── geometry       
+│   ├── mesh             
+│   └── numerics
+├── python                # Python bindings
+│   ├── CMakeLists.txt
+│   ├── __init__.py
+│   ├── mesh
+│   └── numerics
+├── README.md
+├── src                   # Source files for each module
+│   ├── CMakeLists.txt
+│   ├── core
+│   ├── fem
+│   ├── geometry
+│   ├── mesh
+│   └── numerics
+├── testcases             # Physics testcases / comparison with other methods
+└── tests                 # Some quick tests to ensure parts of the library runs/produce consistant output
+    ├── CMakeLists.txt
+    ├── geometry
+    ├── mesh
+    └── numerics
 ```
