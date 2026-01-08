@@ -1,0 +1,6 @@
+Stream software has been developped by:
+=======================================
+
+Nathan Tihon (Université catholique de Louvain, UCL)
+
+Nathan Tihon is a FRIA grantee of the Fonds de la Recherche Scientifique - FNRS
