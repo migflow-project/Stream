@@ -7,4 +7,5 @@ target_sources(mesh PUBLIC
     TYPE HEADERS
     BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/
     FILES ${CMAKE_CURRENT_SOURCE_DIR}/mesh.hpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/DirectAlphaShape2D.hpp
 )

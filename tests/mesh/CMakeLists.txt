@@ -3,6 +3,7 @@ set(MESH_TESTS
     insert_morton_neighbors
     insert_by_circumsphere_check
     insert_bvh_neighbors
+    check_ashape
 )
 
 foreach(T ${MESH_TESTS})
