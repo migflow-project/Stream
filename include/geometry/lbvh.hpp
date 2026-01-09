@@ -100,22 +100,22 @@ namespace stream::geo {
         void set_objects(typename AvaDeviceArray<ObjT, int>::Ptr objects) {
             n = objects->size;
 
-            d_morton = AvaDeviceArray<uint64_t, int>::create({(int) n});
-            d_morton_sorted = AvaDeviceArray<uint64_t, int>::create({(int) n});
+            d_morton->resize({(int) n});
+            d_morton_sorted->resize({(int) n});
 
-            d_map = AvaDeviceArray<uint32_t, int>::create({(int) n});
-            d_map_sorted = AvaDeviceArray<uint32_t, int>::create({(int) n});
+            d_map->resize({(int) n});
+            d_map_sorted->resize({(int) n});
 
-            d_internal_sep = AvaDeviceArray<int, int>::create({(int) (n-1)});
-            d_child_is_leaf = AvaDeviceArray<uint8_t, int>::create({(int) (n-1)});
+            d_internal_sep->resize({(int) (n-1)});
+            d_child_is_leaf->resize({(int) (n-1)});
 
-            d_internal_data = AvaDeviceArray<DataT, int>::create({(int) (n-1)});
-            d_obj_m = AvaDeviceArray<ObjT, int>::create({(int) n});
+            d_internal_data->resize({(int) (n-1)});
+            d_obj_m->resize({(int) n});
             d_obj = objects; // copy pointer
 
-            d_touched = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
-            d_leaf_parent = AvaDeviceArray<uint32_t, int>::create({(int) n});
-            d_internal_parent = AvaDeviceArray<uint32_t, int>::create({(int) (n-1)});
+            d_touched->resize({(int) (n-1)});
+            d_leaf_parent->resize({(int) n});
+            d_internal_parent->resize({(int) (n-1)});
         }
 
         // Compute the bounding box of the set of objects
