@@ -288,7 +288,6 @@ namespace stream::geo {
             AvaView<uint32_t, -1> d_child_right_v   = d_child_right->to_view<-1>();
             AvaView<uint32_t, -1> d_root_v          = d_root->to_view<-1>();
             AvaView<uint32_t, -1> d_subtree_size_v  = d_subtree_size->to_view<-1>();
-            AvaView<BBoxT, -1>    d_bb_glob_v       = d_bb_glob->template to_view<-1>();
             AvaView<ObjT, -1>     d_obj_m_v         = d_obj_m->template to_view<-1>();
             AvaView<BBoxT, -1>    d_bboxes_v        = d_bboxes->template to_view<-1>();
             AvaView<fp_tt, -1>    d_sah_cost_v      = d_sah_cost->to_view<-1>();
@@ -381,7 +380,6 @@ namespace stream::geo {
             AvaView<uint32_t, -1> d_child_right_v   = d_child_right->to_view<-1>();
             AvaView<uint32_t, -1> d_subtree_size_v  = d_subtree_size->to_view<-1>();
             AvaView<BBoxT, -1>    d_bboxes_v        = d_bboxes->template to_view<-1>();
-            AvaView<ObjT, -1>     d_obj_m_v         = d_obj_m->template to_view<-1>();
             AvaView<fp_tt, -1>    d_sah_cost_v      = d_sah_cost->to_view<-1>();
             uint32_t const n_v = static_cast<uint32_t>(n);
             uint32_t const min_size_v = min_size;
