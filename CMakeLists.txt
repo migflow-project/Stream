@@ -70,6 +70,7 @@ set(STREAM_MODULES
     geometry
     numerics
     mesh
+    utils
 )
 
 message(STATUS "Module list : ${STREAM_MODULES}")
@@ -89,7 +90,9 @@ foreach(M ${STREAM_MODULES})
 endforeach()
 
 
-target_link_libraries(mesh PUBLIC geometry)
+target_link_libraries(geometry PUBLIC utils)
+target_link_libraries(mesh PUBLIC geometry utils)
+target_link_libraries(numerics PUBLIC utils)
 
 if (ENABLE_TRIANGLE_REDUNDANCY) 
     target_compile_definitions(TRIANGLE_REDUNDANCY)

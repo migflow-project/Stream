@@ -1,5 +1,5 @@
 
-# ===================== geometry ===========================
+# ===================== numerics ===========================
 
 # Set header when installing target 
 target_sources(numerics PUBLIC

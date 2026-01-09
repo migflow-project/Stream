@@ -1,3 +1,8 @@
+target_include_directories(utils
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/>
+           $<INSTALL_INTERFACE:include/stream/utils/>
+)
+
 if (TARGET geometry)
     target_include_directories(geometry
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/geometry/>
