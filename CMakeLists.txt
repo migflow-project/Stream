@@ -102,6 +102,7 @@ endif()
 add_subdirectory(include/)       # Library includes and interface
 add_subdirectory(src/)           # Source code
 add_subdirectory(python/)        # Python bindings
+add_subdirectory(testcases)      # Testcases
 
 if (ENABLE_TESTS)
     add_subdirectory(tests/)     # Tests
