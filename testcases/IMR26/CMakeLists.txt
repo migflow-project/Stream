@@ -1,5 +1,7 @@
 set(IMR26_TESTS
     uniform2D
+    uniform3D
+    ashape_from_file2D
 )
 
 foreach(T ${IMR26_TESTS})
