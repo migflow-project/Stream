@@ -43,7 +43,7 @@ struct cmd_args_struct {
 
 struct argp_option options[] = {
     {"file",      'i', "path",      0,                   "Path to the coordinate file",          0},
-    {"rngseed",   's', "uint",       0,                   "Seed for the Random Number Generator", 0},
+    {"rngseed",   's', "uint",      0,                   "Seed for the Random Number Generator", 0},
     {"numpts",    'n', "uint",      0,                   "Number of points to generate",         1},
     {"alpha",     'a', "float",     0,                   "alpha value for the alpha-shape",      2},
     {"runs",      'r', "int",       0,                   "Number of iterations",                 2},
@@ -117,8 +117,8 @@ int main(int argc, char **argv) {
     srand(args.rng);
     printf("RNG seed : %u\n", args.rng);
 
-    // ========= Read or generate points ===================
 
+    // ======================== Generate random points in [0, 1]^2 =================
     AvaHostArray<Sphere2D, int>::Ptr h_nodes = AvaHostArray<Sphere2D, int>::create({(int) args.npoints});
 
     for (uint32_t i = 0; i < args.npoints; i++){
@@ -129,6 +129,7 @@ int main(int argc, char **argv) {
         h_nodes(i) = {v, args.alpha};
     }
 
+    // ======================== Set nodes =====================================
     c.start();
     stream::mesh::AlphaShape2D alphashape;
     alphashape.set_nodes(h_nodes);

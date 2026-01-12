@@ -65,8 +65,6 @@ struct AlphaShape2D {
     // Compute the internal bounding boxes of vertices inside the LBVH when 
     // fed as spheres (center, radius)
     struct InternalNodeDataFunctor {
-        using BBoxT = stream::geo::BBox<fp_tt, 2>;
-
         BBoxT __host__ __device__ init(const Sphere2D& prim) const noexcept {
             return BBoxT(prim.c, prim.c);   // Bounding box of a point
         }
@@ -162,7 +160,7 @@ struct AlphaShape2D {
     // Set the point cloud of the alpha-shape
     void set_nodes(const AvaHostArray<Sphere2D, int>::Ptr nodes);
 
-    // Compute LBVH and initialize all arrays with exact number of collisions
+    // Compute LBVH and initialize all arrays with exact number of neighbors
     void init();
 
     // Compute the alpha shape
@@ -243,7 +241,7 @@ struct AlphaShape2D {
     // Each local triangulation is a view in the global memory buffers. 
     struct TriLoc {
         const uint32_t n_points;
-        const AvaView<uint32_t, -1> d_block_offset;
+        const AvaView<uint32_t, -1> d_block_offset_v;
         AvaView<LocalElem, -1> d_node_elemloc_v;
         AvaView<uint32_t, -1> d_node_neig_v;
 
@@ -262,7 +260,7 @@ struct AlphaShape2D {
 
             return {
                 n_points, 
-                d_block_offset,
+                d_block_offset_v,
                 AvaView<LocalElem, -1>(elem, elem_shape),
                 AvaView<uint32_t, -1>(neig, node_shape)
             };
@@ -270,12 +268,12 @@ struct AlphaShape2D {
 
         // Return the memory offset of tid's buffer in tri
         __device__ inline uint32_t get_elem_offset(uint32_t const tid) const {
-            return d_block_offset(tid / WARPSIZE) + tid % WARPSIZE + n_init_tri*(tid/WARPSIZE)*WARPSIZE;
+            return d_block_offset_v(tid / WARPSIZE) + tid % WARPSIZE + n_init_tri*(tid/WARPSIZE)*WARPSIZE;
         };
 
         // Return the memory offset of tid's buffer in d_neig
         __device__ inline uint32_t get_neig_offset(uint32_t const tid) const {
-            return d_block_offset(tid / WARPSIZE) + tid % WARPSIZE;
+            return d_block_offset_v(tid / WARPSIZE) + tid % WARPSIZE;
         };
 
         // Get the j-th element in the local triangulation

@@ -151,12 +151,6 @@ void AlphaShape2D::init() {
         // Radius of the search sphere
         fp_tt const rs = two_delta*si.r;  
 
-        // Bounding box of the searched sphere
-        // fp_tt const pmaxx = si.c[0] + rs;
-        // fp_tt const pmaxy = si.c[1] + rs;
-        // fp_tt const pminx = si.c[0] - rs;
-        // fp_tt const pminy = si.c[1] - rs;
-
         while (stack_size != 0) {
             uint32_t const cur = stack[--stack_size];
             uint32_t const internal_sep = d_internal_sep_v(cur); 
@@ -168,10 +162,7 @@ void AlphaShape2D::init() {
                 bool intersect = true;
                 if (!(cl & (ichild+1))) {
                     const BBox2D tmpbbox = d_bboxes_v(internal_sep+ichild);
-                    // intersect &= pmaxx > tmpbbox.min(0);
-                    // intersect &= pmaxy > tmpbbox.min(1);
-                    // intersect &= pminx < tmpbbox.max(0);
-                    // intersect &= pminy < tmpbbox.max(1);
+                    // Perform a disk-bbox collision test
                     fp_tt const dmaxx = std::fmax(si.c[0] - tmpbbox.max(0), 0.0f);
                     fp_tt const dmaxy = std::fmax(si.c[1] - tmpbbox.max(1), 0.0f);
                     fp_tt const dminx = std::fmax(tmpbbox.min(0) - si.c[0], 0.0f);
@@ -259,7 +250,7 @@ void AlphaShape2D::init() {
 
 void AlphaShape2D::compute(){
 
-    // ==================== Get the index of collisions ==================
+    // ==================== Get the index of neighbors ==================
     const AvaView<int,     -1> d_internal_sep_v  = lbvh.d_internal_sep->to_view<-1>(); 
     const AvaView<uint8_t, -1> d_child_is_leaf_v = lbvh.d_child_is_leaf->to_view<-1>();
     const AvaView<BBox2D,  -1> d_bboxes_v        = lbvh.d_internal_data->to_view<-1>();  
@@ -400,9 +391,6 @@ void AlphaShape2D::compute(){
                 Vec2f pc = d_coords_m_v(i3).c;
                 Vec2f pd = d_coords_m_v(i4).c;
 
-                // Vec2f const ac = pa - pc;
-                // Vec2f const bc = pb - pc;
-                // fp_tt const orientation = ac[0]*bc[1] - ac[1]*bc[0];
                 fp_tt const orientation = orient2d(&pa[0], &pb[0], &pc[0]);
 
                 // Inexact check
