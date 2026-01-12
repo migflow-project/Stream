@@ -12,27 +12,42 @@
 #include "lbvh.hpp"
 #include "defines.h"
 
-// Compute the internal bounding boxes of vertices inside the LBVH when 
-// fed as spheres (center, radius)
-struct InternalNodeDataFunctor {
-    using BBoxT = stream::geo::BBox<fp_tt, 2>;
+// Forward declarations
+namespace stream::mesh {
+    struct AlphaShape2D;
+} // namespace stream::mesh
 
-    BBoxT __host__ __device__ init(const Sphere2D& prim) const noexcept {
-        return prim.c.get_bbox();
-    }
 
-    void __host__ __device__ combine(BBoxT& lhs, const BBoxT& rhs) const noexcept {
-        lhs.combineBox(rhs);
-    }
+// C-compatible typedefs and interface
+#ifdef __cplusplus 
+extern "C" {
+#endif
 
-    BBoxT __host__ __device__ finalize(const BBoxT& data) const noexcept {
-        return data;
-    }
-};
+    typedef struct stream::mesh::AlphaShape2D AlphaShape2D;
 
-// Karras LBVH taking 2D spheres as objects (center, radius) 
-// This structure is used to accelerate the radius searches.
-using NodeLBVH2D = stream::geo::LBVH<Sphere2D, InternalNodeDataFunctor, 2>;
+    // Create and destroy a pointer to an AlphaShape2D structure
+    AlphaShape2D* AlphaShape2D_create();
+    void AlphaShape2D_destroy(AlphaShape2D* ashape);
+
+    // Given @nnodes 2D coords in row-major order (x0 y0 x1 y1 ...) and @nnodes alpha values
+    // Set the corresponding point cloud and desired alphas
+    void AlphaShape2D_set_nodes(AlphaShape2D* const ashape, uint32_t nnodes, fp_tt const* const coords, fp_tt const * const alpha);
+
+    // Init the alpha-shape (allocate memory, precompute number of neighbors)
+    void AlphaShape2D_init(AlphaShape2D* const ashape);
+
+    // Compute the alpha-shape
+    void AlphaShape2D_compute(AlphaShape2D* const ashape);
+
+    // Retrieve the number of element in the alpha-shape
+    uint32_t AlphaShape2D_get_nelem(AlphaShape2D const * const ashape);
+
+    // Retrieve the elements in the alpha-shape
+    void AlphaShape2D_get_elem(AlphaShape2D const * const ashape, uint32_t * const elems);
+
+#ifdef __cplusplus 
+}
+#endif
 
 namespace stream::mesh {
 
@@ -46,6 +61,28 @@ struct AlphaShape2D {
 
     using VecT = typename geo::Vec<fp_tt, 2>;   // 2d vector type
     using BBoxT = typename geo::BBox<fp_tt, 2>; // 2d bbox type
+
+    // Compute the internal bounding boxes of vertices inside the LBVH when 
+    // fed as spheres (center, radius)
+    struct InternalNodeDataFunctor {
+        using BBoxT = stream::geo::BBox<fp_tt, 2>;
+
+        BBoxT __host__ __device__ init(const Sphere2D& prim) const noexcept {
+            return BBoxT(prim.c, prim.c);   // Bounding box of a point
+        }
+
+        void __host__ __device__ combine(BBoxT& lhs, const BBoxT& rhs) const noexcept {
+            lhs.combineBox(rhs); // Merge 2 bboxes
+        }
+
+        BBoxT __host__ __device__ finalize(const BBoxT& data) const noexcept {
+            return data;
+        }
+    };
+
+    // Karras LBVH taking 2D spheres as objects (center, radius) 
+    // This structure is used to accelerate the radius searches.
+    using NodeLBVH2D = stream::geo::LBVH<Sphere2D, InternalNodeDataFunctor, 2>;
                                                       
     static constexpr uint32_t const dim = 2;        // Dimension of the problem
     static constexpr uint32_t const n_inf_pts = 3;  // Number of infinity points (one above, one below right, one below left)
@@ -99,6 +136,7 @@ struct AlphaShape2D {
      * CSR format.
      * They should be used for Host-Device communications.
      */
+
     // Offset of the i-th node neighbor data
     AvaDeviceArray<uint32_t, int>::Ptr d_row;
     // Global neighbors ID. 
@@ -230,20 +268,22 @@ struct AlphaShape2D {
             };
         }
 
-        // Return the memory d_row_offset of tid's buffer in tri
+        // Return the memory offset of tid's buffer in tri
         __device__ inline uint32_t get_elem_offset(uint32_t const tid) const {
             return d_block_offset(tid / WARPSIZE) + tid % WARPSIZE + n_init_tri*(tid/WARPSIZE)*WARPSIZE;
         };
 
-        // Return the memory d_row_offset of tid's buffer in d_neig
+        // Return the memory offset of tid's buffer in d_neig
         __device__ inline uint32_t get_neig_offset(uint32_t const tid) const {
             return d_block_offset(tid / WARPSIZE) + tid % WARPSIZE;
         };
 
+        // Get the j-th element in the local triangulation
         __device__ inline LocalElem& get_elem(uint32_t const j) const {
             return d_node_elemloc_v(j*WARPSIZE);
         };
 
+        // Get the j-th neighbor in the neighborhood
         __device__ inline uint32_t get_neig(uint32_t const j) const {
             if (j >= n_inf_pts) {
                 return d_node_neig_v((j-n_inf_pts)*WARPSIZE);
@@ -251,6 +291,7 @@ struct AlphaShape2D {
             return j + n_points;
         };
 
+        // Set the j-th neighbor in the neighborhood
         __device__ inline uint32_t& set_neig(uint32_t const j) const {
             return d_node_neig_v((j-n_inf_pts)*WARPSIZE);
         };

@@ -1,6 +1,6 @@
-#include <functional>
 #include <cstdio>
 
+#include "ava_host_array.h"
 #include "defines.h"
 #include "DirectAlphaShape2D.hpp"
 #include "ava.h"
@@ -655,3 +655,60 @@ void AlphaShape2D::compress() {
 }
 
 } // namespace stream::mesh
+  
+#ifdef __cplusplus 
+extern "C" {
+#endif
+
+// Create and destroy a pointer to an AlphaShape2D structure
+AlphaShape2D* AlphaShape2D_create() {
+    return new AlphaShape2D;
+}
+
+void AlphaShape2D_destroy(AlphaShape2D* ashape) {
+    delete ashape;
+}
+
+// Given @nnodes 2D coords in row-major order (x0 y0 x1 y1 ...) and @nnodes alpha values
+// Set the corresponding point cloud and desired alphas
+void AlphaShape2D_set_nodes(AlphaShape2D* const ashape, uint32_t nnodes, fp_tt const* const coords, fp_tt const * const alpha) {
+    
+    // Pack the coordinates and alpha values into Sphere2D
+    AvaHostArray<Sphere2D>::Ptr h_nodes = AvaHostArray<Sphere2D>::create({(int) nnodes});
+
+    for (uint32_t i = 0; i < nnodes; ++i){
+        h_nodes(i) = {
+            .c = Vec2f({coords[2*i], coords[2*i+1]}), 
+            .r = alpha[i]
+        };
+    }
+
+    ashape->set_nodes(h_nodes);
+}
+
+// Init the alpha-shape (allocate memory, precompute number of neighbors)
+void AlphaShape2D_init(AlphaShape2D* const ashape){
+    ashape->init();
+}
+
+// Compute the alpha-shape
+void AlphaShape2D_compute(AlphaShape2D* const ashape){
+    ashape->compute();
+    ashape->compress();
+}
+
+// Retrieve the number of element in the alpha-shape
+uint32_t AlphaShape2D_get_nelem(AlphaShape2D const * const ashape) {
+    return ashape->n_tri;
+}
+
+// Retrieve the elements in the alpha-shape
+void AlphaShape2D_get_elem(AlphaShape2D const * const ashape, uint32_t * const elems){
+    using Elem = AlphaShape2D::Elem;
+
+    gpu_memcpy(elems, ashape->d_triglob->data, sizeof(Elem)*ashape->n_tri, gpu_memcpy_device_to_host);
+}
+
+#ifdef __cplusplus 
+}
+#endif
