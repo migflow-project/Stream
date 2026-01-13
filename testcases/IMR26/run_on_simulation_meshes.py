@@ -16,14 +16,14 @@ waterfall_files = [
 ]
 
 dambreak_files = [
-    "./input_meshes/mesh_dambreak/mesh_dambreak_0.0005.bin",
-    "./input_meshes/mesh_dambreak/mesh_dambreak_4e-05.bin",
-    "./input_meshes/mesh_dambreak/mesh_dambreak_5e-05.bin",
-    "./input_meshes/mesh_dambreak/mesh_dambreak_0.0003.bin",
-    "./input_meshes/mesh_dambreak/mesh_dambreak_0.0001.bin",
+    "./input_meshes/mesh_dambreak/mesh_dambreak_1e-03.bin",
+    "./input_meshes/mesh_dambreak/mesh_dambreak_5e-04.bin",
+    "./input_meshes/mesh_dambreak/mesh_dambreak_3e-04.bin",
+    "./input_meshes/mesh_dambreak/mesh_dambreak_1e-04.bin",
     "./input_meshes/mesh_dambreak/mesh_dambreak_7e-05.bin",
+    "./input_meshes/mesh_dambreak/mesh_dambreak_5e-05.bin",
+    "./input_meshes/mesh_dambreak/mesh_dambreak_4e-05.bin",
     "./input_meshes/mesh_dambreak/mesh_dambreak_3e-05.bin",
-    "./input_meshes/mesh_dambreak/mesh_dambreak_0.001.bin"
 ]
 
 files_2D = []
@@ -50,7 +50,7 @@ for file in files_2D:
     alpha = point_cloud[:, 2]
 
 
-    nruns = 10
+    nruns = 30
     start = perf_counter()
     for run in range(nruns):
         # Compute total compute time : computing lbvh + neighbors + triangulation + filter + compression
@@ -96,7 +96,7 @@ for file in files_3D:
     alpha = point_cloud[:, 3]
 
 
-    nruns = 10
+    nruns = 30
     start = perf_counter()
     for run in range(nruns):
         # Compute total compute time : computing lbvh + neighbors + triangulation + filter + compression
