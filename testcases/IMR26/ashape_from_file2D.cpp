@@ -158,6 +158,11 @@ int main(int argc, char **argv) {
         std::vector<stream::mesh::AlphaShape2D::Elem> elems;
         std::vector<Sphere2D> nodes;
 
+        // Retrieve output
+        // WARNING : the triangles use indices of the morton-ordered objects
+        //           Hence using the "h_nodes" array will yield nonsensical graphs
+        //           To have correct results, retrieve the morton-ordered objects 
+        //           using alphashape.getCoordsMorton()
         alphashape.getTri(elems);
         alphashape.getCoordsMorton(nodes);
 
