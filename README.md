@@ -11,6 +11,9 @@ of the Particle Finite Element Method pipeline :
 - Assembly of the linear system of equations 
 - Solution of the system
 
+In order to reproduce benchmarks shown in our IMR26 paper, please refer to 
+[./testcases/IMR26/README.md]
+
 ## Requirements 
 
 The bare minimum to be able to compile and run the code is the following :
@@ -37,7 +40,8 @@ mkdir build && cd build
 
 # Configure the project 
 cmake .. [additional config options]
-# e.g. : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=ON -DENABLE_CUDA=ON
+# Recommended for CPU : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=OFF -DENABLE_TBB=OFF
+# Recommended for CUDA : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON -DENABLE_ARCH=<your cuda arch, e.g: 89>
 
 # Compile the code. NOTE : -j is strongly recommended when compiling for GPU
 # as it is much slower than classical CPU compilation
