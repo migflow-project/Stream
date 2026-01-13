@@ -697,6 +697,15 @@ void AlphaShape2D_get_elem(AlphaShape2D const * const ashape, uint32_t * const e
     gpu_memcpy(elems, ashape->d_triglob->data, sizeof(Elem)*ashape->n_tri, gpu_memcpy_device_to_host);
 }
 
+void AlphaShape2D_get_ordered_nodes(AlphaShape2D * const ashape, fp_tt * const nodes) {
+    std::vector<Sphere2D> h_nodes;
+    ashape->getCoordsMorton(h_nodes);
+    for (uint32_t i = 0; i < ashape->n_points; ++i){
+        nodes[2*i] = h_nodes[i].c[0];
+        nodes[2*i+1] = h_nodes[i].c[1];
+    }
+}
+
 #ifdef __cplusplus 
 }
 #endif

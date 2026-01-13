@@ -45,6 +45,7 @@ extern "C" {
     // Retrieve the elements in the alpha-shape
     void AlphaShape2D_get_elem(AlphaShape2D const * const ashape, uint32_t * const elems);
 
+    void AlphaShape2D_get_ordered_nodes(AlphaShape2D * const ashape, fp_tt * const nodes);
 #ifdef __cplusplus 
 }
 #endif

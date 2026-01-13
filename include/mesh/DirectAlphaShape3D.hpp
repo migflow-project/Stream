@@ -44,6 +44,7 @@ extern "C" {
     // Retrieve the elements in the alpha-shape
     void AlphaShape3D_get_elem(AlphaShape3D const * const ashape, uint32_t * const elems);
 
+    void AlphaShape3D_get_ordered_nodes(AlphaShape3D * const ashape, fp_tt * const nodes);
 #ifdef __cplusplus 
 }
 #endif

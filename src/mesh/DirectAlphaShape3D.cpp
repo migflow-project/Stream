@@ -473,7 +473,8 @@ void AlphaShape3D::compute(){
                 // Find the boundary of the cavity (topological circle)
                 // Using a tailored version of Algorithm 4 presented in 
                 // Ray, Nicolas, Dmitry Sokolov, Sylvain Lefebvre, and Bruno Lévy. 2018. “Meshless Voronoi on the GPU.” ACM Trans. Graph. 37 (6): 265:1-265:12. https://doi.org/10.1145/3272127.3275092.
-                while (Rsize){
+                int niter = 0;
+                while (Rsize && niter++ < 100){
                     // Get a tet in the cavity
                     uint8_t tcur[dim] = {
                         tloc.get_elem(cur).a, 
@@ -698,3 +699,72 @@ void AlphaShape3D::compress() {
 }
 
 } // namespace stream::mesh
+
+
+
+#ifdef __cplusplus 
+extern "C" {
+#endif
+
+// Create and destroy a pointer to an AlphaShape2D structure
+AlphaShape3D* AlphaShape3D_create() {
+    return new AlphaShape3D;
+}
+
+void AlphaShape3D_destroy(AlphaShape3D* ashape) {
+    delete ashape;
+}
+
+// Given @nnodes 2D coords in row-major order (x0 y0 x1 y1 ...) and @nnodes alpha values
+// Set the corresponding point cloud and desired alphas
+void AlphaShape3D_set_nodes(AlphaShape3D* const ashape, uint32_t nnodes, fp_tt const* const coords, fp_tt const * const alpha) {
+    
+    // Pack the coordinates and alpha values into Sphere2D
+    AvaHostArray<Sphere3D>::Ptr h_nodes = AvaHostArray<Sphere3D>::create({(int) nnodes});
+
+    for (uint32_t i = 0; i < nnodes; ++i){
+        h_nodes(i) = {
+            .c = Vec3f({coords[3*i], coords[3*i+1], coords[3*i+2]}), 
+            .r = alpha[i]
+        };
+    }
+
+    ashape->set_nodes(h_nodes);
+}
+
+// Init the alpha-shape (allocate memory, precompute number of neighbors)
+void AlphaShape3D_init(AlphaShape3D* const ashape){
+    ashape->init();
+}
+
+// Compute the alpha-shape
+void AlphaShape3D_compute(AlphaShape3D* const ashape){
+    ashape->compute();
+    ashape->compress();
+}
+
+// Retrieve the number of element in the alpha-shape
+uint32_t AlphaShape3D_get_nelem(AlphaShape3D const * const ashape) {
+    return ashape->n_tri;
+}
+
+// Retrieve the elements in the alpha-shape
+void AlphaShape3D_get_elem(AlphaShape3D const * const ashape, uint32_t * const elems){
+    using Elem = AlphaShape3D::Elem;
+
+    gpu_memcpy(elems, ashape->d_triglob->data, sizeof(Elem)*ashape->n_tri, gpu_memcpy_device_to_host);
+}
+
+void AlphaShape3D_get_ordered_nodes(AlphaShape3D * const ashape, fp_tt * const nodes) {
+    std::vector<Sphere3D> h_nodes;
+    ashape->getCoordsMorton(h_nodes);
+    for (uint32_t i = 0; i < ashape->n_points; ++i){
+        nodes[3*i] = h_nodes[i].c[0];
+        nodes[3*i+1] = h_nodes[i].c[1];
+        nodes[3*i+2] = h_nodes[i].c[2];
+    }
+}
+
+#ifdef __cplusplus 
+}
+#endif
