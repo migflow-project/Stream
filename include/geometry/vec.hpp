@@ -1,11 +1,3 @@
-/* file stream/include/geometry/vec.hpp
- *
- * Define the templated structure : 
- *      Vec<typename Scalar, int dim> 
- *
- * For use with 2, 3 and 4 dimension tuples 
- */
-
 #ifndef __STREAM_VEC_HPP__
 #define __STREAM_VEC_HPP__
 
@@ -15,6 +7,13 @@
 #include <utility>
 #include <cmath>
 
+/* file stream/include/geometry/vec.hpp
+ *
+ * Define the templated structure : 
+ *      Vec<typename Scalar, int dim> 
+ *
+ * For use with 2, 3 and 4 dimension tuples 
+ */
 
 namespace stream::geo {
     // Forward declaration
