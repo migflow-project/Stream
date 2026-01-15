@@ -30,8 +30,17 @@
 #include "predicates.hpp"
 #include "lbvh.hpp"
 
+/*
+ *  This file contains the 2D implementation of our algorithm as described 
+ *  in the IMR26 paper.
+ *
+ *  The 2D and 3D implementations are sensibly equivalent, with the exception 
+ *  of the computation of the Delaunay Ball Bij that differs in both implementations.
+ */
+
 namespace stream::mesh {
 
+// Initialize an empty AlphaShape structure
 AlphaShape2D::AlphaShape2D() {
     temp_mem = AvaDeviceArray<char, size_t>::create({0});
     d_node_nineig = AvaDeviceArray<uint32_t, int>::create({0});
@@ -51,12 +60,18 @@ AlphaShape2D::AlphaShape2D() {
     d_row_offset = AvaDeviceArray<uint32_t, int>::create({0});
 }
 
+// Set the point cloud for which we want to compute the Alpha-Shape. 
+// The point cloud is given as an array of 2D spheres (center, radius) of the form: 
+//            [ (x0, y0), alpha_0
+//              (x1, y1), alpha_1 
+//              ...          ]
 void AlphaShape2D::set_nodes(const AvaHostArray<Sphere2D, int>::Ptr h_nodes) {
     n_points = h_nodes->size();
     d_coords = AvaDeviceArray<Sphere2D, int>::create({(int) n_points});
     d_coords->set(h_nodes);
 }
 
+// Get the permutation array mapping the original order to the morton-order
 uint32_t AlphaShape2D::getPermutation(std::vector<uint32_t>& perm) const{
     perm.resize(n_points);
     gpu_memcpy(perm.data(), lbvh.d_map_sorted->data, sizeof(perm[0])*n_points, gpu_memcpy_device_to_host);
@@ -64,12 +79,14 @@ uint32_t AlphaShape2D::getPermutation(std::vector<uint32_t>& perm) const{
     return perm.size();
 }
 
+// Get the triangles in the alpha-shape
 uint32_t AlphaShape2D::getTri(std::vector<Elem>& tri) const {
     tri.resize(d_triglob->size);
     gpu_memcpy(tri.data(), d_triglob->data, sizeof(tri[0])*d_triglob->size, gpu_memcpy_device_to_host);
     return tri.size();
 }
 
+// Get the edges in the alpha-shape
 uint32_t AlphaShape2D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<uint32_t>& edges) const {
     nEdgeNodes.resize(n_points+1);
     edges.resize(n_edges);
@@ -80,25 +97,27 @@ uint32_t AlphaShape2D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<ui
     return edges.size();
 }
 
-uint32_t AlphaShape2D::getBoundaryEdges(std::vector<uint8_t>& edge_is_bnd) const {
-    edge_is_bnd.resize(n_edges);
-    gpu_memcpy(edge_is_bnd.data(), d_edge_is_bnd->data, sizeof(edge_is_bnd[0])*(n_edges), gpu_memcpy_device_to_host);
-    return edge_is_bnd.size();
-}
-
+// Get the boundary nodes in the alpha-shape
 uint32_t AlphaShape2D::getBoundaryNodes(std::vector<uint8_t>& node_is_bnd) const {
     node_is_bnd.resize(n_points);
     gpu_memcpy(node_is_bnd.data(), d_node_is_bnd->data, sizeof(node_is_bnd[0])*(n_points), gpu_memcpy_device_to_host);
     return node_is_bnd.size();
 }
 
+// Get the set of 2D spheres (center, radius) in the morton-order
 uint32_t AlphaShape2D::getCoordsMorton(std::vector<Sphere2D>& coords_m) const {
     coords_m.resize(n_points);
     gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_points), gpu_memcpy_device_to_host);
     return coords_m.size();
 }
 
-
+// Init the alpha-shape :
+// - Allocate memory for GPU arrays (according to the number of nodes)
+// - Build the LBVH
+// - Add the "infinity" points
+// - Perform the neighbor counting pass
+// - Get the maximum number of neighbor per 32 to allocate memory for the 
+//   hybrid ELL/CSR arrays
 void AlphaShape2D::init() {
 
     n_blocks = (n_points + WARPSIZE - 1)/WARPSIZE;
@@ -112,6 +131,7 @@ void AlphaShape2D::init() {
     d_node_nineig->resize({(int) n_points});
     d_node_nfneig->resize({(int) n_points});
 
+    // Build acceleration structure (LBVH)
     lbvh.set_objects(d_coords);
     lbvh.build();
 
@@ -191,7 +211,7 @@ void AlphaShape2D::init() {
                     stack_size += intersect;
                 } else {
                     Sphere2D const sj = d_coords_m_v(internal_sep+ichild);
-                    // Check that || si - sj ||^2 < [2 min(alpha_i, alpha_j)]^2
+                    // Check that || si - sj ||^2 < [2*delta* min(alpha_i, alpha_j)]^2
                     fp_tt const min_alpha = std::fmin(si.r, sj.r);
                     intersect = (si.c - sj.c).sqnorm() < (two_delta*min_alpha)*(two_delta*min_alpha);
 
@@ -227,6 +247,8 @@ void AlphaShape2D::init() {
     
     // Compute the maximum number of collisions on each group of 32 nodes. 
     // This will allow us to compute the block offsets for the ELL/CSR format
+    // NOTE: It would be nice to use cub::SegmentedReduce::Max but as we are not 
+    //       aligned to 32 we'd have to give an offset array, which requires more memory
     AvaView<uint32_t, -1> d_block_offset_v = d_block_offset->to_view<-1>();
     uint32_t const c_n_points = n_points;
     ava_for<256>(nullptr, 0, n_blocks, [=] __device__ (uint32_t const tid){
@@ -267,6 +289,7 @@ void AlphaShape2D::init() {
     d_active_neig->resize({(int)n_neig});
 }
 
+// Compute the alpha-shape 
 void AlphaShape2D::compute(){
 
     // ==================== Get the index of neighbors ==================
@@ -295,7 +318,7 @@ void AlphaShape2D::compute(){
             // 2*delta with delta = sqrt((1 + 4eps)/(1-3eps)) as described in
             // section 5.1 of the paper
             constexpr fp_tt const two_delta = 2.0000004172325445139859201780136934301654f;
-            fp_tt const rs = two_delta*si.r;  // Radius of the search sphere : 
+            fp_tt const rs = two_delta*si.r;  // Radius of the search sphere 
 
             while (stack_size != 0) {
                 uint32_t const cur = stack[--stack_size];
@@ -317,7 +340,7 @@ void AlphaShape2D::compute(){
                         stack_size += intersect;
                     } else if (tid != internal_sep+ichild) {
                         Sphere2D const sj = d_coords_m_v(internal_sep+ichild);
-                        // Check that || si - sj ||^2 < [2 min(alpha_i, alpha_j)]^2
+                        // Check that || si - sj ||^2 < [2*delta min(alpha_i, alpha_j)]^2
                         fp_tt const min_alpha = std::fmin(si.r, sj.r);
                         intersect = (si.c - sj.c).sqnorm() < (two_delta*min_alpha)*(two_delta*min_alpha);
                         if (intersect){
@@ -349,7 +372,7 @@ void AlphaShape2D::compute(){
     // Step 2 of the algorithm : section 3.2 of the paper
     ava_for<WARPSIZE>(nullptr, 0, n_points, [=] __device__ (uint32_t const si) {
 
-        // Init the local triangulation for this thread
+        // Init the local triangulation Ti for this thread
         TriLoc tloc = tinit.thread_init(si);
 
         // ================== Initialize Ti by inserting si ==================
@@ -364,12 +387,13 @@ void AlphaShape2D::compute(){
 
 
         uint32_t const nneig_loc = d_node_nineig_v(si);
+        // If less than dim neighbors, impossible to have a simplex (tri in 2D and tet in 3D)
         if (nneig_loc - n_inf_pts < dim) {
             d_node_is_bnd_v(si) = true;
             d_node_ntri_out_v(si) = 0;
             d_node_ntri_v(si) = 0;
             d_node_nfneig_v(si) = 0;
-            return; // If less than dim neighbors, impossible to have a simplex (tri in 2D and tet in 3D)
+            return; 
         }
                                              
         // 256 bitset : i-th bit indicates if i-th local node is used
@@ -393,7 +417,7 @@ void AlphaShape2D::compute(){
 
             // Compute the Delaunay Cavity Cij
             uint32_t Rsize = 0;
-            ti            = 0;
+            ti             = 0;
             while (ti < Tlast) {
                 // Get local triangle made by si and its two neighbors
                 LocalElem const tri_loc = tloc.get_elem(ti);
@@ -612,6 +636,9 @@ void AlphaShape2D::compute(){
     gpu_memcpy(&n_edges, d_row->data + n_points, sizeof(n_edges), gpu_memcpy_device_to_host);
 }
 
+
+// Compress the data from our hybrid ELL/CSR format to the classical CSR 
+// for easier host-device communications
 void AlphaShape2D::compress() {
     d_neig->resize({(int) n_edges});
     d_edge_is_bnd->resize({(int) n_edges});

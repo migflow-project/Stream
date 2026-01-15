@@ -182,14 +182,6 @@ struct AlphaShape3D {
     // @edges [in/out] : user provided vector filled with the edges
     uint32_t getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<uint32_t>& edges) const;
 
-    // Return whether or not edges are on the boundary
-    // @returns : the number of edges 
-    // @warning : The IDs are a permutation of the original IDs. 
-    //            To get the permutation, use getPermutation();
-    // @isBoundary [in/out] : user provided vector filled with one boolean per edges. 
-    //                        false if edge is not boundary and true otherwise.
-    uint32_t getBoundaryEdges(std::vector<uint8_t>& _isBoundaryEdge) const;
-
     // Return whether or not the nodes are on the boundary 
     // @returns : the number of nodes 
     // @warning : The indices are a permutation of the original indices

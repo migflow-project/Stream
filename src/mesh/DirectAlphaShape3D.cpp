@@ -30,8 +30,17 @@
 #include "predicates.hpp"
 #include "lbvh.hpp"
 
+/*
+ *  This file contains the 3D implementation of our algorithm as described 
+ *  in the IMR26 paper.
+ *
+ *  The 2D and 3D implementations are sensibly equivalent, with the exception 
+ *  of the computation of the Delaunay Ball Bij that differs in both implementations.
+ */
+
 namespace stream::mesh {
 
+// Initialize an empty AlphaShape structure
 AlphaShape3D::AlphaShape3D() {
     temp_mem = AvaDeviceArray<char, size_t>::create({0});
     d_node_nineig = AvaDeviceArray<uint32_t, int>::create({0});
@@ -51,12 +60,18 @@ AlphaShape3D::AlphaShape3D() {
     d_row_offset = AvaDeviceArray<uint32_t, int>::create({0});
 }
 
+// Set the point cloud for which we want to compute the Alpha-Shape. 
+// The point cloud is given as an array of 3D spheres (center, radius) of the form: 
+//            [ (x0, y0, z0), alpha_0
+//              (x1, y1, z0), alpha_1 
+//              ...          ]
 void AlphaShape3D::set_nodes(const AvaHostArray<Sphere3D, int>::Ptr h_nodes) {
     n_points = h_nodes->size();
     d_coords = AvaDeviceArray<Sphere3D, int>::create({(int) n_points});
     d_coords->set(h_nodes);
 }
 
+// Get the permutation array mapping the original order to the morton-order
 uint32_t AlphaShape3D::getPermutation(std::vector<uint32_t>& perm) const {
     perm.resize(n_points);
     gpu_memcpy(perm.data(), lbvh.d_map_sorted->data, sizeof(perm[0])*n_points, gpu_memcpy_device_to_host);
@@ -64,12 +79,14 @@ uint32_t AlphaShape3D::getPermutation(std::vector<uint32_t>& perm) const {
     return perm.size();
 }
 
+// Get the tetrahedrons in the alpha-shape
 uint32_t AlphaShape3D::getTri(std::vector<Elem>& tri) const {
     tri.resize(d_triglob->size);
     gpu_memcpy(tri.data(), d_triglob->data, sizeof(tri[0])*d_triglob->size, gpu_memcpy_device_to_host);
     return tri.size();
 }
 
+// Get the edges in the alpha-shape
 uint32_t AlphaShape3D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<uint32_t>& edges) const {
     nEdgeNodes.resize(n_points+1);
     edges.resize(n_edges);
@@ -80,24 +97,27 @@ uint32_t AlphaShape3D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<ui
     return edges.size();
 }
 
-uint32_t AlphaShape3D::getBoundaryEdges(std::vector<uint8_t>& _isBoundaryEdge) const {
-    _isBoundaryEdge.resize(n_edges);
-    gpu_memcpy(_isBoundaryEdge.data(), d_edge_is_bnd->data, sizeof(_isBoundaryEdge[0])*(n_edges), gpu_memcpy_device_to_host);
-    return _isBoundaryEdge.size();
-}
-
-uint32_t AlphaShape3D::getCoordsMorton(std::vector<Sphere3D>& coords_m) const {
-    coords_m.resize(n_points);
-    gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_points), gpu_memcpy_device_to_host);
-    return coords_m.size();
-}
-
+// Get the boundary nodes in the alpha-shape
 uint32_t AlphaShape3D::getBoundaryNodes(std::vector<uint8_t>& _isBoundaryNode) const {
     _isBoundaryNode.resize(n_points);
     gpu_memcpy(_isBoundaryNode.data(), d_node_is_bnd->data, sizeof(_isBoundaryNode[0])*(n_points), gpu_memcpy_device_to_host);
     return _isBoundaryNode.size();
 }
 
+// Get the set of 3D spheres (center, radius) in the morton-order
+uint32_t AlphaShape3D::getCoordsMorton(std::vector<Sphere3D>& coords_m) const {
+    coords_m.resize(n_points);
+    gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_points), gpu_memcpy_device_to_host);
+    return coords_m.size();
+}
+
+// Init the alpha-shape :
+// - Allocate memory for GPU arrays (according to the number of nodes)
+// - Build the LBVH
+// - Add the "infinity" points
+// - Perform the neighbor counting pass
+// - Get the maximum number of neighbor per 32 to allocate memory for the 
+//   hybrid ELL/CSR arrays
 void AlphaShape3D::init() {
 
     n_blocks = (n_points + WARPSIZE - 1)/WARPSIZE;
@@ -111,22 +131,16 @@ void AlphaShape3D::init() {
     d_node_nineig->resize({(int) n_points});
     d_node_nfneig->resize({(int) n_points});
 
-    // Compute acceleration structure (LBVH)
+    // Build acceleration structure (LBVH)
     lbvh.set_objects(d_coords);
     lbvh.build();
 
     // Set infinity points at the end of the morton-reordered nodes
     int n_points_v = n_points;
     lbvh.d_obj_m->resize({(int) (n_points+n_inf_pts)});
+
     const AvaView<Sphere3D, -1> d_coords_m_v = lbvh.d_obj_m->to_view<-1>(); // take view AFTER resize !
-
-    const AvaView<uint32_t, -1> d_node_nineig_v = d_node_nineig->to_view<-1>();
-    const AvaView<uint32_t, -1> d_row_offset_v = d_row_offset->to_view<-1>();
-    const AvaView<int,     -1> d_internal_sep_v  = lbvh.d_internal_sep->to_view<-1>(); 
-    const AvaView<uint8_t, -1> d_child_is_leaf_v = lbvh.d_child_is_leaf->to_view<-1>();
-    const AvaView<BBox3D,  -1> d_bboxes_v        = lbvh.d_internal_data->to_view<-1>();
     BBox3D const * const __restrict__ d_bb_glob = lbvh.d_bb_glob->data;
-
     ava_for<1>(nullptr, 0, 1, [=] __device__(uint32_t const __attribute__((unused)) tid){
         Vec3f const avg = 0.5f*(d_bb_glob->pmax + d_bb_glob->pmin);
         Vec3f const range = d_bb_glob->pmax - d_bb_glob->pmin;
@@ -156,6 +170,11 @@ void AlphaShape3D::init() {
         };
     });
 
+    const AvaView<int,     -1> d_internal_sep_v  = lbvh.d_internal_sep->to_view<-1>(); 
+    const AvaView<uint8_t, -1> d_child_is_leaf_v = lbvh.d_child_is_leaf->to_view<-1>();
+    const AvaView<BBox3D,  -1> d_bboxes_v        = lbvh.d_internal_data->to_view<-1>();
+    const AvaView<uint32_t, -1> d_node_nineig_v = d_node_nineig->to_view<-1>();
+    const AvaView<uint32_t, -1> d_row_offset_v = d_row_offset->to_view<-1>();
 
     // First pass of step 1 (section 3.1 of the paper)
     // Count the number of neighbors by traversing the LBVH.
@@ -201,7 +220,7 @@ void AlphaShape3D::init() {
                     stack_size += intersect;
                 } else {
                     Sphere3D const sj = d_coords_m_v(internal_sep+ichild);
-                    // Check that || si - sj ||^2 < [2 min(alpha_i, alpha_j)]^2
+                    // Check that || si - sj ||^2 < [2*delta* min(alpha_i, alpha_j)]^2
                     fp_tt const min_alpha = std::fmin(si.r, sj.r);
                     intersect = (si.c - sj.c).sqnorm() < (two_delta*min_alpha)*(two_delta*min_alpha);
                     nneig_loc += intersect && (pid != internal_sep+ichild);
@@ -238,6 +257,8 @@ void AlphaShape3D::init() {
 
     // Compute the maximum number of collisions on each group of 32 nodes. 
     // This will allow us to compute the block offsets for the ELL/CSR format
+    // NOTE: It would be nice to use cub::SegmentedReduce::Max but as we are not 
+    //       aligned to 32 we'd have to give an offset array, which requires more memory
     ava_for<256>(nullptr, 0, n_blocks, [=] __device__ (uint32_t const tid){
         uint32_t const start = tid*WARPSIZE;
         uint32_t const end = (tid+1)*WARPSIZE;
@@ -252,6 +273,7 @@ void AlphaShape3D::init() {
         d_block_offset_v(0) = 0;
     });
 
+    // Perform the partial sum of the blocks
     ava::scan::inplace_inclusive_sum(
         nullptr,
         temp_mem_size,
@@ -304,7 +326,7 @@ void AlphaShape3D::compute(){
             // 2*delta with delta = sqrt((1 + 4eps)/(1-3eps)) as described in
             // section 5.1 of the paper
             constexpr fp_tt const two_delta = 2.0000004768371866248429007339848490744624f;
-            fp_tt const rs = two_delta*si.r;  // Radius of the search sphere : 
+            fp_tt const rs = two_delta*si.r;  // Radius of the search sphere
 
             while (stack_size != 0) {
                 uint32_t const cur = stack[--stack_size];
@@ -328,7 +350,7 @@ void AlphaShape3D::compute(){
                         stack_size += intersect;
                     } else if (tid != internal_sep+ichild) {
                         Sphere3D const sj = d_coords_m_v(internal_sep+ichild);
-                        // Check that || si - sj ||^2 < [2 min(alpha_i, alpha_j)]^2
+                        // Check that || si - sj ||^2 < [2*delta*min(alpha_i, alpha_j)]^2
                         fp_tt const min_alpha = std::fmin(si.r, sj.r);
                         intersect = (si.c - sj.c).sqnorm() < (two_delta*min_alpha)*(two_delta*min_alpha);
                         if (intersect){
@@ -341,6 +363,7 @@ void AlphaShape3D::compute(){
             d_node_nineig_v(tid) = nColl_loc > 128 ? 128 : nColl_loc;
         });
 
+    // Reset d_active_neig
     gpu_memset(d_active_neig->data, 0, d_active_neig->size);
 
     AvaView<uint8_t, -1> d_active_neig_v = d_active_neig->to_view<-1>();
@@ -360,7 +383,7 @@ void AlphaShape3D::compute(){
 
         __shared__ uint8_t cycle[WARPSIZE * N_BND]; // allocate 128 bytes per thread for finding the boundary of the cavity
 
-        // Init the local triangulation for this thread
+        // Init the local triangulation Ti for this thread
         TriLoc tloc = tinit.thread_init(tid);
 
         // ================== Initialize Ti by inserting si ==================
@@ -490,8 +513,10 @@ void AlphaShape3D::compute(){
                 int swap_with = (Tlast + Rsize) - 1;
 
                 // Find the boundary of the cavity (topological circle)
-                // Using a tailored version of Algorithm 4 presented in 
-                // Ray, Nicolas, Dmitry Sokolov, Sylvain Lefebvre, and Bruno Lévy. 2018. “Meshless Voronoi on the GPU.” ACM Trans. Graph. 37 (6): 265:1-265:12. https://doi.org/10.1145/3272127.3275092.
+                // Using a tailored version of Algorithm 4 presented in:
+                //     Ray, Nicolas, Dmitry Sokolov, Sylvain Lefebvre, and Bruno Lévy. 2018.
+                //     “Meshless Voronoi on the GPU.” ACM Trans. Graph. 37 (6): 265:1-265:12.
+                //     https://doi.org/10.1145/3272127.3275092.
                 int niter = 0;
                 while (Rsize && niter++ < 100){
                     // Get a tet in the cavity
