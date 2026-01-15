@@ -19,6 +19,10 @@
 # 
 from . import (
     mesh,
+    ashape2D,
+    ashape3D
 )
 
-from .mesh import Mesh2D, AlphaShape2D, AlphaShape3D
+from .mesh import Mesh2D
+from .ashape2D import AlphaShape2D 
+from .ashape3D import AlphaShape3D

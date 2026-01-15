@@ -26,6 +26,8 @@ set(PYTHON_API_SRC
   numerics/linsys.py
   mesh/__init__.py
   mesh/mesh.py
+  mesh/ashape2D.py
+  mesh/ashape3D.py
 )
 
 foreach(f ${PYTHON_API_SRC})
