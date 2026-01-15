@@ -3,7 +3,9 @@
 For reproducibility, this directory contains the benchmarks and testcases shown 
 in our IMR26 paper.
 
-> [!NOTE] Note: when rewriting the code for publication, I discovered some small performance losses due to the implementation. This cleaned up implementation should hence perform slightly better than explained in the paper.
+> [!NOTE] Note
+> When rewriting the code for publication, I discovered some small performance losses due to the implementation. This cleaned up implementation should yield slightly better performances than explained in the paper. In addition, the performances strongly depends on the specifications of your hardware.
+> To get a rough idea of the speedup you should obtain on your hardware with regards to mine, you can look at the number of cores on your card and divide it by 3072 (the number of CUDA cores on my RTX4060). For example the RTX6000 used in the paper has roughly 18k cores and (for large point-cloud) you can observe a factor of 5-6 between the timings on both cards. 
 
 In order to be able to use the Python bindings, you can either :
 
@@ -12,6 +14,7 @@ In order to be able to use the Python bindings, you can either :
 
 The first method is better if you only intend to test the library.
 
+---
 
 ## `uniform2D.cpp`
 

@@ -12,24 +12,30 @@ of the Particle Finite Element Method pipeline :
 - Solution of the system
 
 In order to reproduce benchmarks shown in our IMR26 paper, please refer to 
-[./testcases/IMR26/README.md]
+[`./testcases/IMR26/README.md`](./testcases/IMR26/README.md)
 
 ## Requirements 
 
 The bare minimum to be able to compile and run the code is the following :
 
-- CMake ($\geq$ 3.26)
+- CMake 
 - A C++ compiler supporting C++20 standard
 
 Optional, but strongly recommended requirements include :
 
 - a GPU compiler (CUDA/HIP, depending on your target hardware)
+- cub if you use CUDA / hipcub is you use AMD / TBB for CPU multithreading
+
+The library has been tested on Linux for CPU and CUDA architectures. 
 
 ## Compilation 
 
 The following steps ensure that you download both the source code and its only 
 required dependency (AVA), compile and install them on your system. 
 The installation process also installs the Python API.
+
+If you want to use CUDA/HIP, make sure to follow their installation instructions 
+as well.
 
 ```bash 
 # Clone the repo and its dependencies
@@ -47,7 +53,7 @@ cmake .. [additional config options]
 # as it is much slower than classical CPU compilation
 make -j
 
-# System-wide install of the library 
+# (optional) System-wide install of the library 
 sudo make install
 ```
 
@@ -64,7 +70,15 @@ The usual CMake configuration options such as `-DCMAKE_BUILD_TYPE` are also vali
 ## Python bindings 
 
 Once you've installed the library on your system, you can also use the Python bindings 
-in the library `stream`.
+in the library `stream`. 
+
+If Python does not find the `stream` package, make sure the directory in which
+`stream` is located in the environment variable `PYTHONPATH`. E.g. if `stream` 
+is located in `path/to/directory/stream` make sure `path/to/directory/` is in the 
+`PYTHONPATH` by running the command :
+```bash
+export PYTHONPATH=$PYTHONPATH:path/to/directory
+```
 
 Example of simple system solve :
 ```python 
@@ -119,8 +133,11 @@ niter = cg.solve_jacobi(sys, prec, x)
 ├── assets                # Data / scripts
 │   ├── geofiles
 │   └── scripts
+├── AUTHORS.TXT
 ├── CMakeLists.txt
 ├── Config.cmake.in
+├── COPYING.TXT
+├── LICENSE.TXT
 ├── deps                  # Dependency directory
 │   └── ava         
 ├── include               # Public include files
@@ -141,8 +158,11 @@ niter = cg.solve_jacobi(sys, prec, x)
 │   ├── fem
 │   ├── geometry
 │   ├── mesh
-│   └── numerics
+│   ├── numerics
+│   └── utils
 ├── testcases             # Physics testcases / comparison with other methods
+│   ├── CMakeLists.txt
+│   └── IMR26                 # The benchmarks/validation of our IMR26 paper
 └── tests                 # Some quick tests to ensure parts of the library runs/produce consistant output
     ├── CMakeLists.txt
     ├── geometry
