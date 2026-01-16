@@ -42,19 +42,19 @@ namespace stream::mesh {
 
 // Initialize an empty AlphaShape structure
 AlphaShape3D::AlphaShape3D() {
-    temp_mem = AvaDeviceArray<char, size_t>::create({0});
+    d_temp_mem = AvaDeviceArray<char, size_t>::create({0});
     d_node_nineig = AvaDeviceArray<uint32_t, int>::create({0});
     d_node_nfneig = AvaDeviceArray<uint32_t, int>::create({0});
-    d_node_ntri = AvaDeviceArray<uint8_t, int>::create({0});
-    d_node_ntri_out = AvaDeviceArray<uint8_t, int>::create({0});
-    d_node_triloc = AvaDeviceArray<LocalElem, int>::create({0});
+    d_node_nelem = AvaDeviceArray<uint8_t, int>::create({0});
+    d_node_nelem_out = AvaDeviceArray<uint8_t, int>::create({0});
+    d_node_elemloc = AvaDeviceArray<LocalElem, int>::create({0});
     d_node_neig = AvaDeviceArray<uint32_t, int>::create({0});
     d_active_neig = AvaDeviceArray<uint8_t, int>::create({0});
     d_node_is_bnd = AvaDeviceArray<uint8_t, int>::create({0});
     d_edge_is_bnd = AvaDeviceArray<uint8_t, int>::create({0});
     d_neig = AvaDeviceArray<uint32_t, int>::create({0});
-    d_triglob = AvaDeviceArray<Elem, int>::create({0});
-    d_trirow = AvaDeviceArray<uint32_t, int>::create({0});
+    d_elemglob = AvaDeviceArray<Elem, int>::create({0});
+    d_elemrow = AvaDeviceArray<uint32_t, int>::create({0});
     d_row = AvaDeviceArray<uint32_t, int>::create({0});
     d_block_offset = AvaDeviceArray<uint32_t, int>::create({0});
     d_row_offset = AvaDeviceArray<uint32_t, int>::create({0});
@@ -66,32 +66,32 @@ AlphaShape3D::AlphaShape3D() {
 //              (x1, y1, z0), alpha_1 
 //              ...          ]
 void AlphaShape3D::set_nodes(const AvaHostArray<Sphere3D, int>::Ptr h_nodes) {
-    n_points = h_nodes->size();
-    d_coords = AvaDeviceArray<Sphere3D, int>::create({(int) n_points});
+    n_nodes = h_nodes->size();
+    d_coords = AvaDeviceArray<Sphere3D, int>::create({(int) n_nodes});
     d_coords->set(h_nodes);
 }
 
 // Get the permutation array mapping the original order to the morton-order
 uint32_t AlphaShape3D::getPermutation(std::vector<uint32_t>& perm) const {
-    perm.resize(n_points);
-    gpu_memcpy(perm.data(), lbvh.d_map_sorted->data, sizeof(perm[0])*n_points, gpu_memcpy_device_to_host);
+    perm.resize(n_nodes);
+    gpu_memcpy(perm.data(), lbvh.d_map_sorted->data, sizeof(perm[0])*n_nodes, gpu_memcpy_device_to_host);
 
     return perm.size();
 }
 
 // Get the tetrahedrons in the alpha-shape
-uint32_t AlphaShape3D::getTri(std::vector<Elem>& tri) const {
-    tri.resize(d_triglob->size);
-    gpu_memcpy(tri.data(), d_triglob->data, sizeof(tri[0])*d_triglob->size, gpu_memcpy_device_to_host);
+uint32_t AlphaShape3D::getElem(std::vector<Elem>& tri) const {
+    tri.resize(d_elemglob->size);
+    gpu_memcpy(tri.data(), d_elemglob->data, sizeof(tri[0])*d_elemglob->size, gpu_memcpy_device_to_host);
     return tri.size();
 }
 
 // Get the edges in the alpha-shape
 uint32_t AlphaShape3D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<uint32_t>& edges) const {
-    nEdgeNodes.resize(n_points+1);
+    nEdgeNodes.resize(n_nodes+1);
     edges.resize(n_edges);
 
-    gpu_memcpy(nEdgeNodes.data(), d_row->data, sizeof(nEdgeNodes[0])*(n_points+1), gpu_memcpy_device_to_host);
+    gpu_memcpy(nEdgeNodes.data(), d_row->data, sizeof(nEdgeNodes[0])*(n_nodes+1), gpu_memcpy_device_to_host);
     gpu_memcpy(edges.data(), d_neig->data, sizeof(edges[0])*(n_edges), gpu_memcpy_device_to_host);
 
     return edges.size();
@@ -99,15 +99,15 @@ uint32_t AlphaShape3D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<ui
 
 // Get the boundary nodes in the alpha-shape
 uint32_t AlphaShape3D::getBoundaryNodes(std::vector<uint8_t>& _isBoundaryNode) const {
-    _isBoundaryNode.resize(n_points);
-    gpu_memcpy(_isBoundaryNode.data(), d_node_is_bnd->data, sizeof(_isBoundaryNode[0])*(n_points), gpu_memcpy_device_to_host);
+    _isBoundaryNode.resize(n_nodes);
+    gpu_memcpy(_isBoundaryNode.data(), d_node_is_bnd->data, sizeof(_isBoundaryNode[0])*(n_nodes), gpu_memcpy_device_to_host);
     return _isBoundaryNode.size();
 }
 
 // Get the set of 3D spheres (center, radius) in the morton-order
 uint32_t AlphaShape3D::getCoordsMorton(std::vector<Sphere3D>& coords_m) const {
-    coords_m.resize(n_points);
-    gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_points), gpu_memcpy_device_to_host);
+    coords_m.resize(n_nodes);
+    gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_nodes), gpu_memcpy_device_to_host);
     return coords_m.size();
 }
 
@@ -120,24 +120,24 @@ uint32_t AlphaShape3D::getCoordsMorton(std::vector<Sphere3D>& coords_m) const {
 //   hybrid ELL/CSR arrays
 void AlphaShape3D::init() {
 
-    n_blocks = (n_points + WARPSIZE - 1)/WARPSIZE;
+    n_blocks = (n_nodes + WARPSIZE - 1)/WARPSIZE;
     d_block_offset->resize({(int) n_blocks+1});
-    d_row_offset->resize({(int) n_points+1});
-    d_row->resize({(int) n_points+1});
-    d_node_is_bnd->resize({(int) n_points});
-    d_node_ntri_out->resize({(int) n_points});
-    d_node_ntri->resize({(int) n_points});
-    d_trirow->resize({(int) n_points+1});
-    d_node_nineig->resize({(int) n_points});
-    d_node_nfneig->resize({(int) n_points});
+    d_row_offset->resize({(int) n_nodes+1});
+    d_row->resize({(int) n_nodes+1});
+    d_node_is_bnd->resize({(int) n_nodes});
+    d_node_nelem_out->resize({(int) n_nodes});
+    d_node_nelem->resize({(int) n_nodes});
+    d_elemrow->resize({(int) n_nodes+1});
+    d_node_nineig->resize({(int) n_nodes});
+    d_node_nfneig->resize({(int) n_nodes});
 
     // Build acceleration structure (LBVH)
     lbvh.set_objects(d_coords);
     lbvh.build();
 
     // Set infinity points at the end of the morton-reordered nodes
-    int n_points_v = n_points;
-    lbvh.d_obj_m->resize({(int) (n_points+n_inf_pts)});
+    int n_points_v = n_nodes;
+    lbvh.d_obj_m->resize({(int) (n_nodes+n_inf_nodes)});
 
     const AvaView<Sphere3D, -1> d_coords_m_v = lbvh.d_obj_m->to_view<-1>(); // take view AFTER resize !
     BBox3D const * const __restrict__ d_bb_glob = lbvh.d_bb_glob->data;
@@ -183,7 +183,7 @@ void AlphaShape3D::init() {
     //
     // Each time the neighbor predicate answers true, we increment the number of 
     // neighbor of this vertex.
-    ava_for<256>(nullptr, 0, n_points, [=] __device__(uint32_t const pid) -> void {
+    ava_for<256>(nullptr, 0, n_nodes, [=] __device__(uint32_t const pid) -> void {
         int stack[64];
         int stack_size      = 0;
         stack[stack_size++] = 0;
@@ -237,23 +237,23 @@ void AlphaShape3D::init() {
         temp_mem_size, 
         d_node_nineig->data,
         d_row_offset->data + 1,
-        n_points
+        n_nodes
     );
-    temp_mem->resize({temp_mem_size});
+    d_temp_mem->resize({temp_mem_size});
     ava::scan::inclusive_sum(
-        temp_mem->data,
+        d_temp_mem->data,
         temp_mem_size,
         d_node_nineig->data,
         d_row_offset->data + 1,
-        n_points
+        n_nodes
     );
 
     // Get the total number of collisions on host
-    gpu_memcpy(&n_neig, d_row_offset->data + n_points, sizeof(n_neig), gpu_memcpy_device_to_host);
+    gpu_memcpy(&n_neig, d_row_offset->data + n_nodes, sizeof(n_neig), gpu_memcpy_device_to_host);
 
     AvaView<uint32_t, -1> d_offset_v = d_row_offset->to_view<-1>();
     AvaView<uint32_t, -1> d_block_offset_v = d_block_offset->to_view<-1>();
-    uint32_t const c_n_points = n_points;
+    uint32_t const c_n_points = n_nodes;
 
     // Compute the maximum number of collisions on each group of 32 nodes. 
     // This will allow us to compute the block offsets for the ELL/CSR format
@@ -280,9 +280,9 @@ void AlphaShape3D::init() {
         d_block_offset->data,
         n_blocks+1
     );
-    temp_mem->resize({temp_mem_size});
+    d_temp_mem->resize({temp_mem_size});
     ava::scan::inplace_inclusive_sum(
-        temp_mem->data,
+        d_temp_mem->data,
         temp_mem_size, 
         d_block_offset->data,
         n_blocks+1
@@ -292,7 +292,7 @@ void AlphaShape3D::init() {
     gpu_memcpy(&total, d_block_offset->data + n_blocks, sizeof(total), gpu_memcpy_device_to_host);
 
     // Allocate memory of ELL/CSR arrays
-    d_node_triloc->resize({(int) (total + n_init_tri*n_points)});
+    d_node_elemloc->resize({(int) (total + n_init_elem*n_nodes)});
     d_node_neig->resize({(int) total});
     d_active_neig->resize({(int) n_neig});
 }
@@ -315,12 +315,12 @@ void AlphaShape3D::compute(){
     //
     // Each time the neighbor predicate answers true, we add the corresponding neighbor 
     // in the array
-    ava_for<256>(nullptr, 0, n_points, [=] __device__(uint32_t const tid) -> void {
+    ava_for<256>(nullptr, 0, n_nodes, [=] __device__(uint32_t const tid) -> void {
             TriLoc tloc = tinit.thread_init(tid);
             int stack[64];
             int stack_size      = 0;
             stack[stack_size++] = 0;
-            uint32_t nColl_loc   = n_inf_pts;
+            uint32_t nColl_loc   = n_inf_nodes;
 
             Sphere3D const si = d_coords_m_v(tid);
             // 2*delta with delta = sqrt((1 + 4eps)/(1-3eps)) as described in
@@ -368,16 +368,16 @@ void AlphaShape3D::compute(){
 
     AvaView<uint8_t, -1> d_active_neig_v = d_active_neig->to_view<-1>();
     AvaView<uint8_t, -1> d_node_is_bnd_v = d_node_is_bnd->to_view<-1>();
-    AvaView<uint32_t, -1> d_trirow_v = d_trirow->to_view<-1>();
+    AvaView<uint32_t, -1> d_trirow_v = d_elemrow->to_view<-1>();
     AvaView<uint32_t, -1> d_row_v = d_row->to_view<-1>();
     AvaView<uint32_t, -1> d_node_nfneig_v = d_node_nfneig->to_view<-1>();
-    AvaView<uint8_t, -1> d_node_ntri_v = d_node_ntri->to_view<-1>();
-    AvaView<uint8_t, -1> d_node_ntri_out_v = d_node_ntri_out->to_view<-1>();
+    AvaView<uint8_t, -1> d_node_ntri_v = d_node_nelem->to_view<-1>();
+    AvaView<uint8_t, -1> d_node_ntri_out_v = d_node_nelem_out->to_view<-1>();
     AvaView<uint32_t, -1> d_row_offset_v = d_row_offset->to_view<-1>();
     
 #define N_BND 128
     // Step 2 of the algorithm : section 3.2 of the paper
-    ava_for<WARPSIZE>(nullptr, 0, n_points, [=, *this] __device__ (uint32_t const tid) {
+    ava_for<WARPSIZE>(nullptr, 0, n_nodes, [=, *this] __device__ (uint32_t const tid) {
 
         uint32_t const trank = tid % WARPSIZE;
 
@@ -400,7 +400,7 @@ void AlphaShape3D::compute(){
         tloc.get_elem(3) = {0, 3, 2};
 
         uint32_t const nColl_loc = d_node_nineig_v(tid);
-        if (nColl_loc - n_inf_pts < dim) {
+        if (nColl_loc - n_inf_nodes < dim) {
             d_node_is_bnd_v(tid) = true;
             d_node_ntri_out_v(tid) = 0;
             d_node_ntri_v(tid) = 0;
@@ -408,11 +408,11 @@ void AlphaShape3D::compute(){
             return; // If less than dim neighbors, impossible to have a simplex (tri in 2D and tet in 3D)
         }
                                              
-        uint32_t Tlast = n_init_tri;
+        uint32_t Tlast = n_init_elem;
         uint32_t ti;
 
         // ====================== Insertion loop ==========================
-        for (uint32_t pi = n_inf_pts; pi < nColl_loc; ++pi) {
+        for (uint32_t pi = n_inf_nodes; pi < nColl_loc; ++pi) {
 
             // Get index of neighbor to insert in the current local triangulation
             uint32_t const curr_neig = tloc.get_neig(pi);
@@ -597,7 +597,7 @@ void AlphaShape3D::compute(){
             LocalElem const tri_loc = tloc.get_elem(ti);
 
             // Vertices of the bounding boxes are always outside of acceptable zone
-            if (tri_loc.a < n_inf_pts || tri_loc.b < n_inf_pts || tri_loc.c < n_inf_pts) {
+            if (tri_loc.a < n_inf_nodes || tri_loc.b < n_inf_nodes || tri_loc.c < n_inf_nodes) {
                 // If triangle is not accepted, remove it from the triangulation 
                 // and flag the node as boundary
                 isBoundaryNode_loc = true;
@@ -655,9 +655,9 @@ void AlphaShape3D::compute(){
             // If circumradius is accepted flag the neighbors as active, 
             // else remove the triangle and flag the node as boundary
             if (r_circ <= r1*r1 && r_circ <= r2*r2 && r_circ <= r3*r3 && r_circ <= r4*r4){
-                d_active_neig_v(d_row_offset_v(tid) + tri_loc.a - n_inf_pts) += 1;
-                d_active_neig_v(d_row_offset_v(tid) + tri_loc.b - n_inf_pts) += 1;
-                d_active_neig_v(d_row_offset_v(tid) + tri_loc.c - n_inf_pts) += 1;
+                d_active_neig_v(d_row_offset_v(tid) + tri_loc.a - n_inf_nodes) += 1;
+                d_active_neig_v(d_row_offset_v(tid) + tri_loc.b - n_inf_nodes) += 1;
+                d_active_neig_v(d_row_offset_v(tid) + tri_loc.c - n_inf_nodes) += 1;
                 // Count the number of neighbors
                 cycle[WARPSIZE*tri_loc.a + trank]++;
                 cycle[WARPSIZE*tri_loc.b + trank]++;
@@ -694,36 +694,36 @@ void AlphaShape3D::compute(){
 
 
     // ==================== Scan the number of edges/tri per nodes ============
-    ava::scan::inclusive_sum(nullptr, temp_mem_size, d_node_ntri_out->data, d_trirow->data + 1, n_points);
-    temp_mem->resize({temp_mem_size});
+    ava::scan::inclusive_sum(nullptr, temp_mem_size, d_node_nelem_out->data, d_elemrow->data + 1, n_nodes);
+    d_temp_mem->resize({temp_mem_size});
 
-    ava::scan::inclusive_sum(temp_mem->data, temp_mem_size, d_node_ntri_out->data, d_trirow->data + 1, n_points);
-    gpu_memcpy(&n_tri, d_trirow->data + n_points, sizeof(n_tri), gpu_memcpy_device_to_host);
+    ava::scan::inclusive_sum(d_temp_mem->data, temp_mem_size, d_node_nelem_out->data, d_elemrow->data + 1, n_nodes);
+    gpu_memcpy(&n_elems, d_elemrow->data + n_nodes, sizeof(n_elems), gpu_memcpy_device_to_host);
 
-    ava::scan::inclusive_sum(temp_mem->data, temp_mem_size, d_node_nfneig->data, d_row->data + 1, n_points);
-    gpu_memcpy(&n_edges, d_row->data + n_points, sizeof(n_edges), gpu_memcpy_device_to_host);
+    ava::scan::inclusive_sum(d_temp_mem->data, temp_mem_size, d_node_nfneig->data, d_row->data + 1, n_nodes);
+    gpu_memcpy(&n_edges, d_row->data + n_nodes, sizeof(n_edges), gpu_memcpy_device_to_host);
 }
 
 void AlphaShape3D::compress() {
     d_neig->resize({(int) n_edges});
     d_edge_is_bnd->resize({(int) n_edges});
-    d_triglob->resize({(int) n_tri});
+    d_elemglob->resize({(int) n_elems});
 
     AvaView<uint32_t, -1> d_node_nineig_v = d_node_nineig->to_view<-1>();
     AvaView<uint8_t, -1> d_active_neig_v = d_active_neig->to_view<-1>();
     AvaView<uint8_t, -1> d_edge_is_bnd_v = d_edge_is_bnd->to_view<-1>();
     AvaView<uint32_t, -1> d_neig_v = d_neig->to_view<-1>();
-    AvaView<Elem, -1> d_triglob_v = d_triglob->to_view<-1>();
-    AvaView<uint32_t, -1> d_trirow_v = d_trirow->to_view<-1>();
+    AvaView<Elem, -1> d_triglob_v = d_elemglob->to_view<-1>();
+    AvaView<uint32_t, -1> d_trirow_v = d_elemrow->to_view<-1>();
     AvaView<uint32_t, -1> d_row_v = d_row->to_view<-1>();
     AvaView<uint32_t, -1> d_row_offset_v = d_row_offset->to_view<-1>();
     TriLoc const tinit = get_triloc_struct();
 
-    ava_for<256>(nullptr, 0, n_points, [=, *this] __device__ (uint32_t const tid) {
+    ava_for<256>(nullptr, 0, n_nodes, [=, *this] __device__ (uint32_t const tid) {
         TriLoc tloc = tinit.thread_init(tid);
         uint32_t put_idx = d_row_v(tid);
-        for (uint32_t i = n_inf_pts; i < d_node_nineig_v(tid); ++i) {
-            uint8_t const edge_count = d_active_neig_v(d_row_offset_v(tid) + i - n_inf_pts);
+        for (uint32_t i = n_inf_nodes; i < d_node_nineig_v(tid); ++i) {
+            uint8_t const edge_count = d_active_neig_v(d_row_offset_v(tid) + i - n_inf_nodes);
             if (edge_count) {
                 d_edge_is_bnd_v(put_idx) = (edge_count <= 3);
                 d_neig_v(put_idx++) = tloc.get_neig(i);
@@ -789,20 +789,20 @@ void AlphaShape3D_compute(AlphaShape3D* const ashape){
 
 // Retrieve the number of element in the alpha-shape
 uint32_t AlphaShape3D_get_nelem(AlphaShape3D const * const ashape) {
-    return ashape->n_tri;
+    return ashape->n_elems;
 }
 
 // Retrieve the elements in the alpha-shape
 void AlphaShape3D_get_elem(AlphaShape3D const * const ashape, uint32_t * const elems){
     using Elem = AlphaShape3D::Elem;
 
-    gpu_memcpy(elems, ashape->d_triglob->data, sizeof(Elem)*ashape->n_tri, gpu_memcpy_device_to_host);
+    gpu_memcpy(elems, ashape->d_elemglob->data, sizeof(Elem)*ashape->n_elems, gpu_memcpy_device_to_host);
 }
 
 void AlphaShape3D_get_ordered_nodes(AlphaShape3D * const ashape, fp_tt * const nodes) {
     std::vector<Sphere3D> h_nodes;
     ashape->getCoordsMorton(h_nodes);
-    for (uint32_t i = 0; i < ashape->n_points; ++i){
+    for (uint32_t i = 0; i < ashape->n_nodes; ++i){
         nodes[3*i] = h_nodes[i].c[0];
         nodes[3*i+1] = h_nodes[i].c[1];
         nodes[3*i+2] = h_nodes[i].c[2];

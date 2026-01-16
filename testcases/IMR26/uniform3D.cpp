@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
         edata[aiter].tcompress = c.get_ms();
 
         edata[aiter].ttot = edata[aiter].tashape + edata[aiter].tlbvh;
-        edata[aiter].ntriangles = alphashape.n_tri;
+        edata[aiter].ntriangles = alphashape.n_elems;
     }
 
     // Print run statistics
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
         std::vector<stream::mesh::AlphaShape3D::Elem> elems;
         std::vector<Sphere3D> nodes;
 
-        alphashape.getTri(elems);
+        alphashape.getElem(elems);
         alphashape.getCoordsMorton(nodes);
 
         FILE* felem = fopen("elems.txt", "w");

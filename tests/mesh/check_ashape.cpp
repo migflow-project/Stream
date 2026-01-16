@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
         edata[aiter].tcompress = c.get_ms();
 
         edata[aiter].ttot = edata[aiter].tashape + edata[aiter].tlbvh;
-        edata[aiter].ntriangles = alphashape.n_tri;
+        edata[aiter].ntriangles = alphashape.n_elems;
 
         fprintf(stderr, "\rIteration %u/%u", aiter, args.nruns);
     }
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
         std::vector<stream::mesh::AlphaShape2D::Elem> elems;
         std::vector<Sphere2D> nodes;
 
-        alphashape.getTri(elems);
+        alphashape.getElem(elems);
         alphashape.getCoordsMorton(nodes);
 
         FILE* felem = fopen("elems.txt", "w");

@@ -42,19 +42,19 @@ namespace stream::mesh {
 
 // Initialize an empty AlphaShape structure
 AlphaShape2D::AlphaShape2D() {
-    temp_mem = AvaDeviceArray<char, size_t>::create({0});
+    d_temp_mem = AvaDeviceArray<char, size_t>::create({0});
     d_node_nineig = AvaDeviceArray<uint32_t, int>::create({0});
     d_node_nfneig = AvaDeviceArray<uint32_t, int>::create({0});
-    d_node_ntri = AvaDeviceArray<uint8_t, int>::create({0});
-    d_node_ntri_out = AvaDeviceArray<uint8_t, int>::create({0});
-    d_node_triloc = AvaDeviceArray<LocalElem, int>::create({0});
+    d_node_nelem = AvaDeviceArray<uint8_t, int>::create({0});
+    d_node_nelem_out = AvaDeviceArray<uint8_t, int>::create({0});
+    d_node_elem = AvaDeviceArray<LocalElem, int>::create({0});
     d_node_neig = AvaDeviceArray<uint32_t, int>::create({0});
     d_active_neig = AvaDeviceArray<uint8_t, int>::create({0});
     d_node_is_bnd = AvaDeviceArray<uint8_t, int>::create({0});
     d_edge_is_bnd = AvaDeviceArray<uint8_t, int>::create({0});
     d_neig = AvaDeviceArray<uint32_t, int>::create({0});
-    d_triglob = AvaDeviceArray<Elem, int>::create({0});
-    d_trirow = AvaDeviceArray<uint32_t, int>::create({0});
+    d_elemglob = AvaDeviceArray<Elem, int>::create({0});
+    d_elemrow = AvaDeviceArray<uint32_t, int>::create({0});
     d_row = AvaDeviceArray<uint32_t, int>::create({0});
     d_block_offset = AvaDeviceArray<uint32_t, int>::create({0});
     d_row_offset = AvaDeviceArray<uint32_t, int>::create({0});
@@ -66,32 +66,32 @@ AlphaShape2D::AlphaShape2D() {
 //              (x1, y1), alpha_1 
 //              ...          ]
 void AlphaShape2D::set_nodes(const AvaHostArray<Sphere2D, int>::Ptr h_nodes) {
-    n_points = h_nodes->size();
-    d_coords = AvaDeviceArray<Sphere2D, int>::create({(int) n_points});
+    n_nodes = h_nodes->size();
+    d_coords = AvaDeviceArray<Sphere2D, int>::create({(int) n_nodes});
     d_coords->set(h_nodes);
 }
 
 // Get the permutation array mapping the original order to the morton-order
 uint32_t AlphaShape2D::getPermutation(std::vector<uint32_t>& perm) const{
-    perm.resize(n_points);
-    gpu_memcpy(perm.data(), lbvh.d_map_sorted->data, sizeof(perm[0])*n_points, gpu_memcpy_device_to_host);
+    perm.resize(n_nodes);
+    gpu_memcpy(perm.data(), lbvh.d_map_sorted->data, sizeof(perm[0])*n_nodes, gpu_memcpy_device_to_host);
 
     return perm.size();
 }
 
 // Get the triangles in the alpha-shape
-uint32_t AlphaShape2D::getTri(std::vector<Elem>& tri) const {
-    tri.resize(d_triglob->size);
-    gpu_memcpy(tri.data(), d_triglob->data, sizeof(tri[0])*d_triglob->size, gpu_memcpy_device_to_host);
+uint32_t AlphaShape2D::getElem(std::vector<Elem>& tri) const {
+    tri.resize(d_elemglob->size);
+    gpu_memcpy(tri.data(), d_elemglob->data, sizeof(tri[0])*d_elemglob->size, gpu_memcpy_device_to_host);
     return tri.size();
 }
 
 // Get the edges in the alpha-shape
 uint32_t AlphaShape2D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<uint32_t>& edges) const {
-    nEdgeNodes.resize(n_points+1);
+    nEdgeNodes.resize(n_nodes+1);
     edges.resize(n_edges);
 
-    gpu_memcpy(nEdgeNodes.data(), d_row->data, sizeof(nEdgeNodes[0])*(n_points+1), gpu_memcpy_device_to_host);
+    gpu_memcpy(nEdgeNodes.data(), d_row->data, sizeof(nEdgeNodes[0])*(n_nodes+1), gpu_memcpy_device_to_host);
     gpu_memcpy(edges.data(), d_neig->data, sizeof(edges[0])*(n_edges), gpu_memcpy_device_to_host);
 
     return edges.size();
@@ -99,15 +99,15 @@ uint32_t AlphaShape2D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<ui
 
 // Get the boundary nodes in the alpha-shape
 uint32_t AlphaShape2D::getBoundaryNodes(std::vector<uint8_t>& node_is_bnd) const {
-    node_is_bnd.resize(n_points);
-    gpu_memcpy(node_is_bnd.data(), d_node_is_bnd->data, sizeof(node_is_bnd[0])*(n_points), gpu_memcpy_device_to_host);
+    node_is_bnd.resize(n_nodes);
+    gpu_memcpy(node_is_bnd.data(), d_node_is_bnd->data, sizeof(node_is_bnd[0])*(n_nodes), gpu_memcpy_device_to_host);
     return node_is_bnd.size();
 }
 
 // Get the set of 2D spheres (center, radius) in the morton-order
 uint32_t AlphaShape2D::getCoordsMorton(std::vector<Sphere2D>& coords_m) const {
-    coords_m.resize(n_points);
-    gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_points), gpu_memcpy_device_to_host);
+    coords_m.resize(n_nodes);
+    gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_nodes), gpu_memcpy_device_to_host);
     return coords_m.size();
 }
 
@@ -120,24 +120,24 @@ uint32_t AlphaShape2D::getCoordsMorton(std::vector<Sphere2D>& coords_m) const {
 //   hybrid ELL/CSR arrays
 void AlphaShape2D::init() {
 
-    n_blocks = (n_points + WARPSIZE - 1)/WARPSIZE;
+    n_blocks = (n_nodes + WARPSIZE - 1)/WARPSIZE;
     d_block_offset->resize({(int) n_blocks+1});
-    d_row_offset->resize({(int) n_points+1});
-    d_row->resize({(int) n_points+1});
-    d_node_is_bnd->resize({(int) n_points});
-    d_node_ntri_out->resize({(int) n_points});
-    d_node_ntri->resize({(int) n_points});
-    d_trirow->resize({(int) n_points+1});
-    d_node_nineig->resize({(int) n_points});
-    d_node_nfneig->resize({(int) n_points});
+    d_row_offset->resize({(int) n_nodes+1});
+    d_row->resize({(int) n_nodes+1});
+    d_node_is_bnd->resize({(int) n_nodes});
+    d_node_nelem_out->resize({(int) n_nodes});
+    d_node_nelem->resize({(int) n_nodes});
+    d_elemrow->resize({(int) n_nodes+1});
+    d_node_nineig->resize({(int) n_nodes});
+    d_node_nfneig->resize({(int) n_nodes});
 
     // Build acceleration structure (LBVH)
     lbvh.set_objects(d_coords);
     lbvh.build();
 
     // Set infinity points at the end of the morton-reordered nodes
-    int n_points_v = n_points;
-    lbvh.d_obj_m->resize({(int) (n_points+n_inf_pts)});
+    int n_points_v = n_nodes;
+    lbvh.d_obj_m->resize({(int) (n_nodes+n_inf_nodes)});
 
     const AvaView<Sphere2D, -1> d_coords_m_v = lbvh.d_obj_m->to_view<-1>();
     BBoxT const * const __restrict__ d_bb_glob = lbvh.d_bb_glob->data;
@@ -175,7 +175,7 @@ void AlphaShape2D::init() {
     //
     // Each time the neighbor predicate answers true, we increment the number of 
     // neighbor of this vertex.
-    ava_for<256>(nullptr, 0, n_points, [=] __device__(uint32_t const tid) -> void {
+    ava_for<256>(nullptr, 0, n_nodes, [=] __device__(uint32_t const tid) -> void {
         int stack[64];
         int stack_size      = 0;
         stack[stack_size++] = 0;
@@ -230,19 +230,19 @@ void AlphaShape2D::init() {
         temp_mem_size,
         d_node_nineig->data,
         d_row_offset->data + 1,
-        n_points
+        n_nodes
     );
-    temp_mem->resize({temp_mem_size});
+    d_temp_mem->resize({temp_mem_size});
     ava::scan::inclusive_sum(
-        temp_mem->data,
+        d_temp_mem->data,
         temp_mem_size,
         d_node_nineig->data,
         d_row_offset->data + 1,
-        n_points
+        n_nodes
     );
 
     // Get the total number of collisions on host
-    gpu_memcpy(&n_neig, d_row_offset->data + n_points, sizeof(n_neig), gpu_memcpy_device_to_host);
+    gpu_memcpy(&n_neig, d_row_offset->data + n_nodes, sizeof(n_neig), gpu_memcpy_device_to_host);
 
     
     // Compute the maximum number of collisions on each group of 32 nodes. 
@@ -250,7 +250,7 @@ void AlphaShape2D::init() {
     // NOTE: It would be nice to use cub::SegmentedReduce::Max but as we are not 
     //       aligned to 32 we'd have to give an offset array, which requires more memory
     AvaView<uint32_t, -1> d_block_offset_v = d_block_offset->to_view<-1>();
-    uint32_t const c_n_points = n_points;
+    uint32_t const c_n_points = n_nodes;
     ava_for<256>(nullptr, 0, n_blocks, [=] __device__ (uint32_t const tid){
         uint32_t const start = tid*WARPSIZE;
         uint32_t const end = (tid+1)*WARPSIZE;
@@ -272,9 +272,9 @@ void AlphaShape2D::init() {
         d_block_offset->data,
         n_blocks+1
     );
-    temp_mem->resize({temp_mem_size});
+    d_temp_mem->resize({temp_mem_size});
     ava::scan::inplace_inclusive_sum(
-        temp_mem->data,
+        d_temp_mem->data,
         temp_mem_size, 
         d_block_offset->data,
         n_blocks+1
@@ -284,7 +284,7 @@ void AlphaShape2D::init() {
     gpu_memcpy(&total, d_block_offset->data + n_blocks, sizeof(total), gpu_memcpy_device_to_host);
 
     // Allocate memory of ELL/CSR arrays
-    d_node_triloc->resize({(int) (total + n_init_tri*n_points)});
+    d_node_elem->resize({(int) (total + n_init_elem*n_nodes)});
     d_node_neig->resize({(int) total});
     d_active_neig->resize({(int)n_neig});
 }
@@ -307,9 +307,9 @@ void AlphaShape2D::compute(){
     //
     // Each time the neighbor predicate answers true, we add the corresponding neighbor 
     // in the array
-    ava_for<256>(nullptr, 0, n_points, [=] __device__(uint32_t const tid) -> void {
+    ava_for<256>(nullptr, 0, n_nodes, [=] __device__(uint32_t const tid) -> void {
             TriLoc tloc = tinit.thread_init(tid);
-            uint32_t nneig_loc = n_inf_pts;
+            uint32_t nneig_loc = n_inf_nodes;
             int stack[64];
             int stack_size      = 0;
             stack[stack_size++] = 0;
@@ -362,15 +362,15 @@ void AlphaShape2D::compute(){
 
     AvaView<uint8_t, -1> d_node_is_bnd_v    = d_node_is_bnd->to_view<-1>(); 
     AvaView<uint32_t,  -1> d_node_nfneig_v   = d_node_nfneig->to_view<-1>(); 
-    AvaView<uint8_t, -1> d_node_ntri_v     = d_node_ntri->to_view<-1>();
-    AvaView<uint8_t, -1> d_node_ntri_out_v = d_node_ntri_out->to_view<-1>();
+    AvaView<uint8_t, -1> d_node_ntri_v     = d_node_nelem->to_view<-1>();
+    AvaView<uint8_t, -1> d_node_ntri_out_v = d_node_nelem_out->to_view<-1>();
     AvaView<uint8_t, -1> d_active_neig_v    = d_active_neig->to_view<-1>();
     AvaView<uint32_t,  -1> d_row_offset_v    = d_row_offset->to_view<-1>();   
     AvaView<uint32_t,  -1> d_row_v           = d_row->to_view<-1>();  
-    AvaView<uint32_t,  -1> d_trirow_v        = d_trirow->to_view<-1>();
+    AvaView<uint32_t,  -1> d_trirow_v        = d_elemrow->to_view<-1>();
     
     // Step 2 of the algorithm : section 3.2 of the paper
-    ava_for<WARPSIZE>(nullptr, 0, n_points, [=] __device__ (uint32_t const si) {
+    ava_for<WARPSIZE>(nullptr, 0, n_nodes, [=] __device__ (uint32_t const si) {
 
         // Init the local triangulation Ti for this thread
         TriLoc tloc = tinit.thread_init(si);
@@ -388,7 +388,7 @@ void AlphaShape2D::compute(){
 
         uint32_t const nneig_loc = d_node_nineig_v(si);
         // If less than dim neighbors, impossible to have a simplex (tri in 2D and tet in 3D)
-        if (nneig_loc - n_inf_pts < dim) {
+        if (nneig_loc - n_inf_nodes < dim) {
             d_node_is_bnd_v(si) = true;
             d_node_ntri_out_v(si) = 0;
             d_node_ntri_v(si) = 0;
@@ -400,11 +400,11 @@ void AlphaShape2D::compute(){
         __shared__ uint64_t neig_tag_loc[WARPSIZE*4];
         uint32_t const trank = si % WARPSIZE;
 
-        uint32_t Tlast = n_init_tri;
+        uint32_t Tlast = n_init_elem;
         uint32_t ti; // current element index in Ti
 
         // ====================== Insertion loop ==========================
-        for (uint32_t ni = n_inf_pts; ni < nneig_loc; ++ni) {
+        for (uint32_t ni = n_inf_nodes; ni < nneig_loc; ++ni) {
 
             // Reset Delaunay Cavity Cij
             neig_tag_loc[WARPSIZE*0 + trank] = UINT64_C(0);
@@ -530,7 +530,7 @@ void AlphaShape2D::compute(){
             LocalElem const tri_loc = tloc.get_elem(ti);
 
             // Delete the element if it contains infinity vertices
-            if (tri_loc.a < n_inf_pts || tri_loc.b < n_inf_pts) {
+            if (tri_loc.a < n_inf_nodes || tri_loc.b < n_inf_nodes) {
                 node_is_bnd_loc = true; // flag the current node as boundary
                 Tlast--;
                 tloc.get_elem(ti) = tloc.get_elem(Tlast);
@@ -566,8 +566,8 @@ void AlphaShape2D::compute(){
             if (circum_rsqr <= a_eff*a_eff) {
                 neig_tag_loc[WARPSIZE*(tri_loc.a >> 6ULL) + trank] |= 1ULL << (tri_loc.a & 63ULL);
                 neig_tag_loc[WARPSIZE*(tri_loc.b >> 6ULL) + trank] |= 1ULL << (tri_loc.b & 63ULL);
-                d_active_neig_v(d_row_offset_v(si) + tri_loc.a - n_inf_pts) += 1;
-                d_active_neig_v(d_row_offset_v(si) + tri_loc.b - n_inf_pts) += 1;
+                d_active_neig_v(d_row_offset_v(si) + tri_loc.a - n_inf_nodes) += 1;
+                d_active_neig_v(d_row_offset_v(si) + tri_loc.b - n_inf_nodes) += 1;
                 ntri_loc++;
 
                 // The triangle is inverted : reverse the point ordering
@@ -604,36 +604,36 @@ void AlphaShape2D::compute(){
     ava::scan::inclusive_sum(
         nullptr,
         temp_mem_size,
-        d_node_ntri_out->data,
-        d_trirow->data + 1,
-        n_points
+        d_node_nelem_out->data,
+        d_elemrow->data + 1,
+        n_nodes
     );
-    temp_mem->resize({temp_mem_size});
+    d_temp_mem->resize({temp_mem_size});
     ava::scan::inclusive_sum(
-        temp_mem->data,
+        d_temp_mem->data,
         temp_mem_size, 
-        d_node_ntri_out->data, 
-        d_trirow->data + 1,
-        n_points
+        d_node_nelem_out->data, 
+        d_elemrow->data + 1,
+        n_nodes
     );
-    gpu_memcpy(&n_tri, d_trirow->data + n_points, sizeof(n_tri), gpu_memcpy_device_to_host);
+    gpu_memcpy(&n_elems, d_elemrow->data + n_nodes, sizeof(n_elems), gpu_memcpy_device_to_host);
 
     ava::scan::inclusive_sum(
         nullptr,
         temp_mem_size,
         d_node_nfneig->data,
         d_row->data + 1,
-        n_points
+        n_nodes
     );
-    temp_mem->resize({temp_mem_size});
+    d_temp_mem->resize({temp_mem_size});
     ava::scan::inclusive_sum(
-        temp_mem->data,
+        d_temp_mem->data,
         temp_mem_size,
         d_node_nfneig->data,
         d_row->data + 1,
-        n_points
+        n_nodes
     );
-    gpu_memcpy(&n_edges, d_row->data + n_points, sizeof(n_edges), gpu_memcpy_device_to_host);
+    gpu_memcpy(&n_edges, d_row->data + n_nodes, sizeof(n_edges), gpu_memcpy_device_to_host);
 }
 
 
@@ -642,7 +642,7 @@ void AlphaShape2D::compute(){
 void AlphaShape2D::compress() {
     d_neig->resize({(int) n_edges});
     d_edge_is_bnd->resize({(int) n_edges});
-    d_triglob->resize({(int) n_tri});
+    d_elemglob->resize({(int) n_elems});
 
     AvaView<uint8_t, -1> d_edge_is_bnd_v = d_edge_is_bnd->to_view<-1>(); 
     AvaView<uint32_t,  -1> d_node_nineig_v = d_node_nineig->to_view<-1>();
@@ -650,15 +650,15 @@ void AlphaShape2D::compress() {
     AvaView<uint8_t, -1> d_active_neig_v = d_active_neig->to_view<-1>();
     AvaView<uint32_t,  -1> d_row_offset_v = d_row_offset->to_view<-1>();   
     AvaView<uint32_t,  -1> d_row_v        = d_row->to_view<-1>();  
-    AvaView<uint32_t,  -1> d_trirow_v     = d_trirow->to_view<-1>();
-    AvaView<Elem,   -1> d_triglob_v     = d_triglob->to_view<-1>();
+    AvaView<uint32_t,  -1> d_trirow_v     = d_elemrow->to_view<-1>();
+    AvaView<Elem,   -1> d_triglob_v     = d_elemglob->to_view<-1>();
     TriLoc const tinit = get_triloc_struct();
 
-    ava_for<256>(nullptr, 0, n_points, [=] __device__(uint32_t const si) {
+    ava_for<256>(nullptr, 0, n_nodes, [=] __device__(uint32_t const si) {
         TriLoc tloc = tinit.thread_init(si);
         uint32_t put_idx = d_row_v(si);
-        for (uint32_t i = n_inf_pts; i < d_node_nineig_v(si); ++i) {
-            uint8_t const edge_count = d_active_neig_v(d_row_offset_v(si) + i - n_inf_pts);
+        for (uint32_t i = n_inf_nodes; i < d_node_nineig_v(si); ++i) {
+            uint8_t const edge_count = d_active_neig_v(d_row_offset_v(si) + i - n_inf_nodes);
             if (edge_count) {
                 d_edge_is_bnd_v(put_idx) = (edge_count == 1);
                 d_neig_v(put_idx++) = tloc.get_neig(i);
@@ -733,20 +733,20 @@ void AlphaShape2D_compute(AlphaShape2D* const ashape){
 
 // Retrieve the number of element in the alpha-shape
 uint32_t AlphaShape2D_get_nelem(AlphaShape2D const * const ashape) {
-    return ashape->n_tri;
+    return ashape->n_elems;
 }
 
 // Retrieve the elements in the alpha-shape
 void AlphaShape2D_get_elem(AlphaShape2D const * const ashape, uint32_t * const elems){
     using Elem = AlphaShape2D::Elem;
 
-    gpu_memcpy(elems, ashape->d_triglob->data, sizeof(Elem)*ashape->n_tri, gpu_memcpy_device_to_host);
+    gpu_memcpy(elems, ashape->d_elemglob->data, sizeof(Elem)*ashape->n_elems, gpu_memcpy_device_to_host);
 }
 
 void AlphaShape2D_get_ordered_nodes(AlphaShape2D * const ashape, fp_tt * const nodes) {
     std::vector<Sphere2D> h_nodes;
     ashape->getCoordsMorton(h_nodes);
-    for (uint32_t i = 0; i < ashape->n_points; ++i){
+    for (uint32_t i = 0; i < ashape->n_nodes; ++i){
         nodes[2*i] = h_nodes[i].c[0];
         nodes[2*i+1] = h_nodes[i].c[1];
     }

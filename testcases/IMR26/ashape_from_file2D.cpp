@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
         edata[aiter].tcompress = c.get_ms();
 
         edata[aiter].ttot = edata[aiter].tashape + edata[aiter].tlbvh;
-        edata[aiter].ntriangles = alphashape.n_tri;
+        edata[aiter].ntriangles = alphashape.n_elems;
     }
 
     // Print run statistics
@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
         //           Hence using the "h_nodes" array will yield nonsensical graphs
         //           To have correct results, retrieve the morton-ordered objects 
         //           using alphashape.getCoordsMorton()
-        alphashape.getTri(elems);
+        alphashape.getElem(elems);
         alphashape.getCoordsMorton(nodes);
 
         FILE* felem = fopen("elems.txt", "w");

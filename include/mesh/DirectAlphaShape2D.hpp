@@ -103,20 +103,20 @@ struct AlphaShape2D {
     using NodeLBVH2D = stream::geo::LBVH<Sphere2D, InternalNodeDataFunctor, 2>;
                                                       
     static constexpr uint32_t const dim = 2;        // Dimension of the problem
-    static constexpr uint32_t const n_inf_pts = 3;  // Number of infinity points (one above, one below right, one below left)
-    static constexpr uint32_t const n_init_tri = 3; // Number of initial triangles (linking all infinity points to the current node)
+    static constexpr uint32_t const n_inf_nodes = 3;  // Number of infinity points (one above, one below right, one below left)
+    static constexpr uint32_t const n_init_elem = 3; // Number of initial triangles (linking all infinity points to the current node)
 
     static constexpr uint32_t const WARPSIZE = 32; // size of warp
 
-    uint32_t n_points;   // number of nodes in the mesh
-    uint32_t n_neig;     // number of neighbors (sum of local neighborhoods) 
-    uint32_t n_edges;    // number of edges (= filtered neighbors)
-    uint32_t n_tri;      // number of tri
+    uint32_t n_nodes;    // Number of nodes in the mesh
+    uint32_t n_neig;     // Number of neighbors (sum of local neighborhoods) 
+    uint32_t n_edges;    // Number of edges (= filtered neighbors)
+    uint32_t n_elems;    // Number of tri
     uint32_t n_blocks;   // Number of blocks for the hybrid ELL/CSR
                      
     // Temp memory for the CUB calls
     size_t temp_mem_size = 0;
-    AvaDeviceArray<char, size_t>::Ptr temp_mem;
+    AvaDeviceArray<char, size_t>::Ptr d_temp_mem;
 
     // Coordinates of nodes and their alpha values stored as radius
     AvaDeviceArray<Sphere2D, int>::Ptr d_coords;
@@ -125,29 +125,57 @@ struct AlphaShape2D {
     // Indicate which potential neighbors are connected in the triangulation 
     AvaDeviceArray<uint8_t, int>::Ptr d_active_neig; 
 
+    // Number of elements output by a node. Because we store each triangle once
+    // per node, only one node should output it.
+    AvaDeviceArray<uint8_t, int>::Ptr d_node_nelem_out; 
+    // Number of local triangles of each node
+    AvaDeviceArray<uint8_t, int>::Ptr d_node_nelem;
+    // Number of final neighbors per node
+    AvaDeviceArray<uint32_t, int>::Ptr d_node_nfneig;
+
     /*
-     * These arrays are stored in a custom ELL/CSR format to increase GPU 
-     * coalescent accesses.
+     * The following arrays are stored in a custom ELL/CSR format to increase 
+     * GPU coalescent accesses. 
+     *
      * It increases the total memory requirement of irregular triangulations but
      * decreases runtime.
      * They should be used for computations.
+     * 
+     * The hybrid ELL/CSR format groups blocks of 32 rows in the ELL format 
+     * and expresses the blocks in CSR format. 
+     * The @d_block_offset array gives the memory offset of each block
+     *     @d_row_offset array gives the memory offset of each row
+     *
+     * E.g considering blocks of 2 row, the matrix :
+     *         0  1  0  0  1  0  0
+     *         1  1  0  0  0  0  0 
+     *         1  0  0  1  0  0  1
+     *         0  0  1  0  1  0  0
+     *         0  0  0  0  0  1  0
+     *         1  1  0  1  0  0  0
+     * Can be expressed in 3 blocks 
+     *             values                 columns
+     *  block 0    1  1                   1  4
+     *             1  1                   0  1
+     *
+     *  block 1    1  1  1                0  3  6
+     *             1  1  x                2  4  x
+     *
+     *  block 2    1  x  x                5  x  x
+     *             1  1  1                0  1  3
+     *
+     *  d_block_offset = [ 0, 4, 10, 16]
+     *  d_row_offset = [0, 2, 4, 7, 10, 13, 16]
      */
 
     // Offset of i-th block of ELL/CSR 
-    AvaDeviceArray<uint32_t, int>::Ptr d_block_offset;
+    AvaDeviceArray<uint32_t, int>::Ptr  d_block_offset;
     // Offset of i-th node data 
     AvaDeviceArray<uint32_t, int>::Ptr  d_row_offset;
     // Local triangulation representation 
-    AvaDeviceArray<LocalElem, int>::Ptr  d_node_triloc;    
+    AvaDeviceArray<LocalElem, int>::Ptr d_node_elem;    
     // Global neighbors ID of local neighborhoods.
     AvaDeviceArray<uint32_t, int>::Ptr  d_node_neig;      
-    // How many triangle output by a node. Because we store each triangle once
-    // per node, only one node should output it.
-    AvaDeviceArray<uint8_t, int>::Ptr d_node_ntri_out; 
-    // Number of local triangles of each node
-    AvaDeviceArray<uint8_t, int>::Ptr d_node_ntri;
-    // Number of final neighbors per node
-    AvaDeviceArray<uint32_t, int>::Ptr d_node_nfneig;
                                     
     /*
      * Output buffers for the alpha-shape. These arrays are stored in classic
@@ -161,15 +189,15 @@ struct AlphaShape2D {
     // See @d_row to get index of local neighborhood of i-th node
     AvaDeviceArray<uint32_t, int>::Ptr d_neig;  
     // Offset of the i-th node triangle data 
-    AvaDeviceArray<uint32_t, int>::Ptr d_trirow;
+    AvaDeviceArray<uint32_t, int>::Ptr d_elemrow;
     // Global triangulation. See @d_trirow to get the index of the 
     // local triangulation of i-th node.
-    AvaDeviceArray<Elem, int>::Ptr  d_triglob;
+    AvaDeviceArray<Elem, int>::Ptr     d_elemglob;
 
     // Is the i-th node on the free-surface boundary ?
-    AvaDeviceArray<uint8_t, int>::Ptr d_node_is_bnd;  
+    AvaDeviceArray<uint8_t, int>::Ptr  d_node_is_bnd;  
     // Is the i-th edge part of the free-surface boundary ?
-    AvaDeviceArray<uint8_t, int>::Ptr d_edge_is_bnd;  
+    AvaDeviceArray<uint8_t, int>::Ptr  d_edge_is_bnd;  
 
     NodeLBVH2D lbvh;   // Spatial search structure
                   
@@ -196,7 +224,7 @@ struct AlphaShape2D {
         AvaView<T, -1> d_out_v = d_out->template to_view<-1>();
         AvaView<uint32_t, -1> d_map_v = lbvh.d_map_sorted->to_view<-1>();
 
-        ava_for<256>(nullptr, 0, n_points, [=] __device__ (uint32_t const tid) {
+        ava_for<256>(nullptr, 0, n_nodes, [=] __device__ (uint32_t const tid) {
             d_out_v(tid) = d_in_v(d_map_v(tid));
         });
     }
@@ -208,7 +236,7 @@ struct AlphaShape2D {
         AvaView<T, -1> d_out_v = d_out->template to_view<-1>();
         AvaView<uint32_t, -1> d_map_v = lbvh.d_map_sorted->to_view<-1>();
 
-        ava_for<256>(nullptr, 0, n_points, [=] __device__ (uint32_t const tid) {
+        ava_for<256>(nullptr, 0, n_nodes, [=] __device__ (uint32_t const tid) {
             d_out_v(d_map_v(tid)) = d_in_v(tid);
         });
     }
@@ -225,7 +253,7 @@ struct AlphaShape2D {
     //            To get the permutation, use getPermutation();
     // @returns : the number of triangles.
     // @tri [in/out] : user provided vector filled with the triangles. Output size is 3 x #tri
-    uint32_t getTri(std::vector<Elem>& tri) const;
+    uint32_t getElem(std::vector<Elem>& tri) const;
 
     // Get every edge of the alphashape. The output is a CSR array representing the adjacency matrix of the underlying graph.
     // @returns : the number of edges 
@@ -280,7 +308,7 @@ struct AlphaShape2D {
 
         // Return the memory offset of tid's buffer in tri
         __device__ inline uint32_t get_elem_offset(uint32_t const tid) const {
-            return d_block_offset_v(tid / WARPSIZE) + tid % WARPSIZE + n_init_tri*(tid/WARPSIZE)*WARPSIZE;
+            return d_block_offset_v(tid / WARPSIZE) + tid % WARPSIZE + n_init_elem*(tid/WARPSIZE)*WARPSIZE;
         };
 
         // Return the memory offset of tid's buffer in d_neig
@@ -295,23 +323,23 @@ struct AlphaShape2D {
 
         // Get the j-th neighbor in the neighborhood
         __device__ inline uint32_t get_neig(uint32_t const j) const {
-            if (j >= n_inf_pts) {
-                return d_node_neig_v((j-n_inf_pts)*WARPSIZE);
+            if (j >= n_inf_nodes) {
+                return d_node_neig_v((j-n_inf_nodes)*WARPSIZE);
             }
             return j + n_points;
         };
 
         // Set the j-th neighbor in the neighborhood
         __device__ inline uint32_t& set_neig(uint32_t const j) const {
-            return d_node_neig_v((j-n_inf_pts)*WARPSIZE);
+            return d_node_neig_v((j-n_inf_nodes)*WARPSIZE);
         };
     };
 
     __host__ TriLoc get_triloc_struct() const {
         return {
-            n_points,
+            n_nodes,
             d_block_offset->to_view<-1>(), 
-            d_node_triloc->to_view<-1>(),
+            d_node_elem->to_view<-1>(),
             d_node_neig->to_view<-1>()
         };
     }
