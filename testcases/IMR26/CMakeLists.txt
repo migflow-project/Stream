@@ -30,3 +30,11 @@ foreach(T ${IMR26_TESTS})
         set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/${T}.cpp PROPERTIES LANGUAGE CUDA)
     endif()
 endforeach()
+
+set(PYTHON_IMR26_TESTS
+    run_on_simulation_meshes.py
+)
+
+foreach(f ${PYTHON_IMR26_TESTS})
+    configure_file("${f}" "${CMAKE_CURRENT_BINARY_DIR}/${f}" @ONLY)
+endforeach()

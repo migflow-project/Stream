@@ -12,7 +12,7 @@ of the Particle Finite Element Method pipeline :
 - Solution of the system
 
 In order to reproduce benchmarks shown in our IMR26 paper, please refer to 
-[`./testcases/IMR26/README.md`](./testcases/IMR26/README.md)
+[`./testcases/IMR26/README.md`](./testcases/IMR26/README.md) after successful compilation of the project.
 
 ## Requirements 
 
@@ -46,8 +46,8 @@ mkdir build && cd build
 
 # Configure the project 
 cmake .. [additional config options]
-# Recommended for CPU : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=OFF -DENABLE_TBB=OFF
-# Recommended for CUDA : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON -DENABLE_ARCH=<your cuda arch, e.g: 89>
+# Recommended for sequential CPU : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=OFF -DENABLE_TBB=OFF
+# Recommended for CUDA : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON
 
 # Compile the code. NOTE : -j is strongly recommended when compiling for GPU
 # as it is much slower than classical CPU compilation

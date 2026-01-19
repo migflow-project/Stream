@@ -3,16 +3,14 @@
 For reproducibility, this directory contains the benchmarks and testcases shown 
 in our IMR26 paper.
 
+Make sure to unzip the mesh dataset:
+```console 
+unzip IMR26_GPU_AlphaShape_dataset.zip
+```
+
 > [!NOTE] Note
 > When rewriting the code for publication, I discovered some small performance losses due to the implementation. This cleaned up implementation should yield slightly better performances than explained in the paper. In addition, the performances strongly depends on the specifications of your hardware.
 > To get a rough idea of the speedup you should obtain on your hardware with regards to mine, you can look at the number of cores on your card and divide it by 3072 (the number of CUDA cores on my RTX4060). For example the RTX6000 used in the paper has roughly 18k cores and (for large point-cloud) you can observe a factor of 5-6 between the timings on both cards. 
-
-In order to be able to use the Python bindings, you can either :
-
-- Add the `build/` directory to your PYTHONPATH : `export PYTHONPATH=$PYTHONPATH:<path to your build>`
-- Install the library system-wide : `sudo make install`
-
-The first method is better if you only intend to test the library.
 
 ---
 
@@ -22,6 +20,7 @@ This testcase was used to get the "Ours" column in table 1.a of our paper
 
 To see what command line options are available, run:
 ```console 
+$ cd <your build directory>
 $ ./testcases/IMR26/uniform2D --help
 ```
 
@@ -40,6 +39,7 @@ Example for running our 2D alpha-shape algorithm on 1M uniformly sampled points
 using an alpha value of 0.0012 and 10 repetitions.
 
 ```console 
+$ cd <your build directory>
 $  ./testcases/IMR26/uniform2D -n 1000000 -a 0.0012 -r 5 | column -t
 init 2244.595422 ms
 RNG  seed      :        42                                        
@@ -51,6 +51,16 @@ run  alpha     npoints  ntri     tlbvh      tashape    tcompress  ttot
 4    0.001200  1000000  1877465  5.218465   17.134976  0.002700   22.353441
 ```
 
+Description of the columns:
+
+- `run`: the ID of the sample
+- `alpha`: alpha value used for the alpha-shape
+- `ntri`: number of simplices in the resulting mesh (triangles in 2D and tetrahedrons in 3D)
+- `tlbvh`: time to construct the LBVH and query the *number* of neighbors, in milliseconds
+- `tashape`: time to query the *ID* of the neighbors and to construct the alpha-shape mesh, in milliseconds
+- `tcompress`: time to compress the arrays into CSR format for easier CPU-GPU communications, in milliseconds
+- `ttot`: the total time, in milliseconds
+
 
 ## `uniform3D.cpp` 
 
@@ -58,6 +68,7 @@ This testcase was used to get the "Ours" column in table 1.b of our paper
 
 To see what command line options are available, run:
 ```console 
+$ cd <your build directory>
 $ ./testcases/IMR26/uniform3D --help
 ```
 
@@ -75,6 +86,7 @@ Example for running our 3D alpha-shape algorithm on 100k uniformly sampled point
 using an alpha value of 0.022 and 10 repetitions.
 
 ```console 
+$ cd <your build directory>
 $  ./testcases/IMR26/uniform3D -n 100000 -a 0.022 -r 5 | column -t
 init 202.356052 ms
 RNG  seed      :        42                                      
@@ -86,19 +98,35 @@ run  alpha     npoints  ntri    tlbvh     tashape    tcompress  ttot
 4    0.022000  100000   526040  2.157196  25.871720  0.003850   28.028916
 ```
 
+Description of the columns:
+
+- `run`: the ID of the sample
+- `alpha`: alpha value used for the alpha-shape
+- `ntri`: number of simplices in the resulting mesh (triangles in 2D and tetrahedrons in 3D)
+- `tlbvh`: time to construct the LBVH and query the *number* of neighbors, in milliseconds
+- `tashape`: time to query the *ID* of the neighbors and to construct the alpha-shape mesh, in milliseconds
+- `tcompress`: time to compress the arrays into CSR format for easier CPU-GPU communications, in milliseconds
+- `ttot`: the total time, in milliseconds
+
+
 ## `run_on_simulation_meshes.py` 
+
+In order to be able to use the Python bindings, you can either :
+
+- Add the `build/` directory to your PYTHONPATH : `export PYTHONPATH=$PYTHONPATH:<path to your build>`
+- Set the `PYTHONPATH` on a per-command basis : `PYTHONPATH=$PYTHONPATH:<path to your build> python run_on_simulation_meshes.py`
+- Install the library system-wide : `sudo make install`
+
+The first method is better if you only intend to test the library, the second if you only intend to run this command 
+and the third if you intend to use the library in other scripts.
 
 This script can be used to reproduce the validation testcases of section 7.1 to 7.3.
 It is a Python script that will read the meshes from `./input_meshes/`. And 
 execute both the 2D-3D testcases using our library's Python API.
 
-First make sure to unzip the dataset:
+Running the testcase :
 ```console 
-unzip IMR26_GPU_AlphaShape_dataset.zip
-```
-
-Then run the testcase :
-```console 
+$  cd <your build directory>
 $  python run_on_simulation_meshes.py 
 [2D] Time to mesh './input_meshes/mesh_waterfall/mesh_waterfall_1e-03.bin' (4552 nodes, 8313 triangles) : 0.0008s
 [...]
