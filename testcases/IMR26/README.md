@@ -5,11 +5,17 @@ in our IMR26 paper.
 
 Make sure to unzip the mesh dataset inside the build directory:
 ```console 
-unzip IMR26_GPU_AlphaShape_dataset.zip -d <your build directory>
+unzip testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip -d <your build directory>
+```
 
-# E.g:
-#   - if you are in the testcases/IMR26/ directory : unzip IMR26_GPU_AlphaShape_dataset.zip -d ../../build/
-#   - if you are in the top level directory : unzip testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip -d build/
+There should be a `<your build directory>/input_meshes/` directory after this command.
+The input point clouds are provided in binary to reduce the repository's size, but they can 
+easily be read with the following Python command: 
+
+```python 
+# use a shape of (-1, 3) for 2D point clouds and (-1, 4) for 3D point clouds.
+# The file is a simple binary array of x, y, (z), alpha components.
+point_cloud = numpy.fromfile(filename, dtype=np.float32).reshape((-1, 3))   
 ```
 
 > [!NOTE] Note
@@ -23,8 +29,8 @@ unzip IMR26_GPU_AlphaShape_dataset.zip -d <your build directory>
 This testcase was used to get the "Ours" column in table 1.a of our paper
 
 To see what command line options are available, run:
-```console 
-$ cd build/
+```bash 
+$ cd build/                  # make sure to be in your build directory
 $ ./testcases/IMR26/uniform2D --help
 ```
 
@@ -42,11 +48,9 @@ Values used in the paper :
 Example for running our 2D alpha-shape algorithm on 1M uniformly sampled points 
 using an alpha value of 0.0012 and 10 repetitions.
 
-```console 
-$ cd build/
+```bash 
+$ cd build/               # make sure to be in your build directory
 $  ./testcases/IMR26/uniform2D -n 1000000 -a 0.0012 -r 5 | column -t
-init 2244.595422 ms
-RNG  seed      :        42                                        
 run  alpha     npoints  ntri     tlbvh      tashape    tcompress  ttot
 0    0.001200  1000000  1877465  14.827297  18.336657  0.165415   33.163954
 1    0.001200  1000000  1877465  5.223866   17.122290  0.003134   22.346156
@@ -71,8 +75,8 @@ Description of the columns:
 This testcase was used to get the "Ours" column in table 1.b of our paper
 
 To see what command line options are available, run:
-```console 
-$ cd build/
+```bash 
+$ cd build/         # make sure to be in your build directory
 $ ./testcases/IMR26/uniform3D --help
 ```
 
@@ -89,11 +93,9 @@ Values used in the paper :
 Example for running our 3D alpha-shape algorithm on 100k uniformly sampled points 
 using an alpha value of 0.022 and 10 repetitions.
 
-```console 
-$ cd build/
+```bash 
+$ cd build/         # make sure to be in your build directory
 $  ./testcases/IMR26/uniform3D -n 100000 -a 0.022 -r 5 | column -t
-init 202.356052 ms
-RNG  seed      :        42                                      
 run  alpha     npoints  ntri    tlbvh     tashape    tcompress  ttot
 0    0.022000  100000   526040  7.069145  27.886839  0.187139   34.955984
 1    0.022000  100000   526040  2.174104  25.823812  0.003399   27.997916
@@ -116,8 +118,11 @@ Description of the columns:
 ## `run_on_simulation_meshes.py` 
 
 This script can be used to reproduce the validation testcases of section 7.1 to 7.3.
-It is a Python script that will read the meshes from `./input_meshes/`. And 
+It is a Python script that will read the meshes from `build/input_meshes/`. And 
 execute both the 2D-3D testcases using our library's Python API.
+
+Note the `PYTHONPATH=$PYTHONPATH:.` at the start of the command to append the build directory to the `PYTHONPATH`
+for this command. This will allow to use the Python's binding of our library.
 
 Running the testcase :
 ```console 

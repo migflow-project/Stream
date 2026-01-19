@@ -52,7 +52,6 @@ struct exec_data {
 // Command line arguments
 typedef struct cmd_args_struct cmd_args_st;
 struct cmd_args_struct {
-    char *fname;
     uint32_t npoints;           
     uint32_t nruns;
     fp_tt alpha;
@@ -61,21 +60,17 @@ struct cmd_args_struct {
 };
 
 struct argp_option options[] = {
-    {"file",      'i', "path",      0,                   "Path to the coordinate file",          0},
     {"rngseed",   's', "uint",      0,                   "Seed for the Random Number Generator", 0},
     {"numpts",    'n', "uint",      0,                   "Number of points to generate",         1},
     {"alpha",     'a', "float",     0,                   "alpha value for the alpha-shape",      2},
     {"runs",      'r', "int",       0,                   "Number of iterations",                 2},
-    {"output",    'o', "",          OPTION_ARG_OPTIONAL, "Whether or not to output results",     3},
+    {"output",    'o', "",          OPTION_ARG_OPTIONAL, "Output results in .txt files",         3},
     {0,           0,   0,           0,                   0,                                      0}
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state) {
     cmd_args_st *args = (cmd_args_st *)state->input;
     switch (key) {
-        case 'i':
-            args->fname = arg;
-            break;
         case 's':
             args->rng = (uint32_t)strtoull(arg, NULL, 10);
             break;
@@ -116,7 +111,6 @@ static struct argp argp = {options, parse_opt, NULL, doc, NULL, NULL, NULL};
 
 cmd_args_st parse_args(int argc, char** argv) {
     cmd_args_st default_args = {
-        .fname         = NULL,
         .npoints       = 100,
         .nruns         = 30,
         .alpha         = 1.f,
@@ -134,8 +128,6 @@ int main(int argc, char **argv) {
     // Parse arguments
     cmd_args_st args = parse_args(argc, argv);
     srand(args.rng);
-    printf("RNG seed : %u\n", args.rng);
-
 
     // ======================== Generate random points in [0, 1]^2 =================
     AvaHostArray<Sphere2D, int>::Ptr h_nodes = AvaHostArray<Sphere2D, int>::create({(int) args.npoints});

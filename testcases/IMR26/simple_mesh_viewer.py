@@ -19,15 +19,26 @@
 # 
 import numpy as np 
 import matplotlib.pyplot as plt 
-import matplotlib.collections as mc
-import matplotlib.patches as mp
-import sys
 
-fnode = sys.argv[1]
-felem = sys.argv[2]
+import argparse
+import os
 
-nodes = np.loadtxt(fnode, np.float32, delimiter=" ")
-elems = np.loadtxt(felem, np.uint32, delimiter=" ")
+# Initialize the parser
+parser = argparse.ArgumentParser(
+    description="Graph the mesh described by a node and an element text files."
+)
+
+parser.add_argument("node_file", help="Path to the input node file")
+parser.add_argument("elem_file", help="Path to the input element file")
+args = parser.parse_args()
+
+if not os.path.exists(args.node_file):
+    print(f"Error: {args.node_file} does not exist.")
+if not os.path.exists(args.elem_file):
+    print(f"Error: {args.elem_file} does not exist.")
+
+nodes = np.loadtxt(args.node_file, np.float32, delimiter=" ")
+elems = np.loadtxt(args.elem_file, np.uint32, delimiter=" ")
 
 fig, ax = plt.subplots()
 ax.triplot(nodes[:, 0], nodes[:, 1], elems, linewidth=2)

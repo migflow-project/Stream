@@ -27,7 +27,7 @@ Optional, but strongly recommended requirements include :
 - a GPU compiler (CUDA/HIP, depending on your target hardware)
 - cub if you use CUDA / hipcub is you use AMD / TBB for CPU multithreading
 
-The library has been tested on Linux for CPU and CUDA architectures. 
+The library has been tested on Linux for CPU and CUDA architectures.
 
 ## Compilation 
 
@@ -51,9 +51,9 @@ mkdir build && cd build
 
 # Configure the project 
 cmake .. [additional config options]
-# Recommended for CPU : cmake .. -DCMAKE_BUILD_TYPE=Release
-# Recommended for CUDA : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON
-# Recommended for HIP : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_HIP=ON
+# Recommended for CPU: cmake .. -DCMAKE_BUILD_TYPE=Release
+# Recommended for CUDA: cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON
+# Recommended for HIP: cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_HIP=ON
 
 # Compile the code. NOTE : -j is strongly recommended when compiling for GPU
 # as it is much slower than classical CPU compilation
@@ -81,59 +81,19 @@ Once you've installed the library on your system, you can also use the Python bi
 in the library `stream`. 
 
 If Python does not find the `stream` package, make sure the directory in which
-`stream` is located in the environment variable `PYTHONPATH`. E.g. if `stream` 
+`stream` is located is in the environment variable `PYTHONPATH`. E.g. if `stream` 
 is located in `path/to/directory/stream` make sure `path/to/directory/` is in the 
-`PYTHONPATH` by running the command :
+`PYTHONPATH` by running the command:
 ```bash
 export PYTHONPATH=$PYTHONPATH:path/to/directory
 ```
 
-Example of simple system solve :
-```python 
-import stream.numerics as stn
-import numpy as np
-import scipy.sparse as sp
-
-n = 50000   # Size of the matrix
-target_sparsity = 0.001    # Percent of nonzero values in the matrix
-
-nnz = int(n * (n * target_sparsity))
-nnz_half = nnz // 2   # /2 because we generate the Lower triangular
-                      # matrix and then symmetrize
-
-# To get the target sparsity, we generate a COO matrix with nnz/2 random triplets
-r = np.random.randint(0, n, size=(nnz_half,))
-c = np.random.randint(0, n, size=(nnz_half,))
-v = np.random.uniform(0, 1, size=(nnz_half,))
-
-Acoo = sp.coo_array((v, (r, c)), shape=(n, n), dtype=np.float32)
-Acoo = 0.5 * (Acoo + Acoo.T)                    # Symmetrize
-Acoo[np.diag_indices(n)] += Acoo @ np.ones(n)   # Make diagonally dominant
-
-# Transform to CSR for solve
-Asp = sp.csr_array(Acoo, dtype=np.float32)
-
-# Generate the host CSR matrix
-hcsr = stn.HostCSR(Asp.indptr, Asp.indices, Asp.data)
-# Copy it into device
-dcsr = stn.DeviceCSR(hcsr)
-
-# Create the linear system with a random independant vector 
-b = np.random.uniform(0, 1, size=(n,)).astype(np.float32)
-sys = stn.LinSys(dcsr, b)
-
-# Compute the preconditioner
-prec = stn.PrecJacobi(dcsr)
-
-# Initialize the Conjugate Gradient solver
-cg = stn.SolverCG()
-
-# Solve with our library
-x = np.zeros(n, dtype=np.float32)
-niter = cg.solve_jacobi(sys, prec, x)
-```
+Note that this will only modify the `PYTHONPATH` for the current terminal session. 
+To avoid executing this command everytime you start a new terminal, you can put this command in your shell configuration file (`.bashrc`, `.zshrc`, ...)
 
 ## Running Test-cases
+
+In order to reproduce benchmarks shown in our IMR26 paper, refer to the instructions in [`./testcases/IMR26/README.md`](./testcases/IMR26/README.md).
 
 ## Project Structure
 
