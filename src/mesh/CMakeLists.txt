@@ -17,14 +17,13 @@
 # You should have received a copy of the GNU Lesser General Public License along with Stream. 
 # If not, see <https://www.gnu.org/licenses/>.
 # 
-target_sources(mesh
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/DirectAlphaShape2D.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/DirectAlphaShape3D.cpp
+set(MESH_SRC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DirectAlphaShape2D.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DirectAlphaShape3D.cpp
 )
+target_sources(mesh PRIVATE ${MESH_SRC})
 
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/mesh.cpp TARGET_DIRECTORY mesh PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/DirectAlphaShape2D.cpp TARGET_DIRECTORY mesh PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/DirectAlphaShape3D.cpp TARGET_DIRECTORY mesh PROPERTIES LANGUAGE CUDA)
-endif()
+foreach(file ${MESH_SRC})
+    set_source_files_properties(${file} TARGET_DIRECTORY mesh PROPERTIES LANGUAGE ${AVA_LANGUAGE})
+endforeach()

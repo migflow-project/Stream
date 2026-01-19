@@ -17,18 +17,16 @@
 # You should have received a copy of the GNU Lesser General Public License along with Stream. 
 # If not, see <https://www.gnu.org/licenses/>.
 # 
-target_sources(geometry
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vec.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/bbox.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/lbvh.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/lbvh_agglo.cpp
-)
 
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/vec.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/bbox.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/lbvh.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/lbvh_agglo.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
-endif()
+set(GEOMETRY_SRC
+    ${CMAKE_CURRENT_SOURCE_DIR}/vec.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bbox.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/lbvh.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/lbvh_agglo.cpp
+)
+target_sources(geometry PRIVATE ${GEOMETRY_SRC})
+
+foreach(file ${GEOMETRY_SRC})
+    set_source_files_properties(${file} TARGET_DIRECTORY geometry PROPERTIES LANGUAGE ${AVA_LANGUAGE})
+endforeach()

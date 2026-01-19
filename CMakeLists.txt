@@ -60,29 +60,25 @@ set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/stream" 
 
 
 option(ENABLE_TESTS "Compile tests" OFF)
-option(ENABLE_CUDA "Compile with CUDA" ON)
-option(ENABLE_TRIANGLE_REDUNDANCY "When set, every node will compute ALL incident simplices" OFF)
+option(ENABLE_CUDA "Compile with CUDA" OFF)
+option(ENABLE_HIP "Compile with HIP" OFF)
+option(ENABLE_TRIANGLE_REDUNDANCY "When set, every node will compute ALL incident simplices" ON)
 
 set(ENABLE_ARCH "native" CACHE STRING "Target architecture. E.g. 89 for CUDA compilation or armv8-a for CPU compilation. Default=native")
 
 if (ENABLE_CUDA)
     message(STATUS "Stream compile Target : CUDA. Architecture : ${ENABLE_ARCH}")
-    enable_language(CUDA)
-
     set(AVA_TARGET "CUDA" CACHE STRING "Compilation target")
-    add_compile_definitions(AVA_TARGET_CUDA)
+elseif (ENABLE_HIP)
+    message(STATUS "Stream compile Target : HIP. Architecture : ${ENABLE_ARCH}")
+    set(AVA_TARGET "HIP" CACHE STRING "Compilation target")
 else()
-    message(STATUS "Stream compile Target : CPU")
+    message(STATUS "Stream compile Target : CPU. Architecture : ${ENABLE_ARCH}")
     set(AVA_TARGET "CPU" CACHE STRING "Compilation target")
-    add_compile_definitions(AVA_TARGET_CPU)
 endif()
 
 include(./deps/ava/ava.cmake)
 
-if (ENABLE_CUDA)
-    set(CMAKE_CUDA_FLAGS "--extended-lambda --extra-device-vectorization -g -lineinfo")
-    set(CMAKE_CUDA_ARCHITECTURES ${ENABLE_ARCH})
-endif()
 # ============================= Define targets ================================
 
 set(STREAM_MODULES
@@ -102,19 +98,18 @@ foreach(M ${STREAM_MODULES})
             PUBLIC $<BUILD_INTERFACE:${D}>
                    $<INSTALL_INTERFACE:include/ava/>
         )
+
+        target_compile_options(${M} PUBLIC ${AVA_COMPILE_OPTIONS})
     endforeach()
-    if (ENABLE_CUDA)
-        set_property(TARGET ${M} PROPERTY CUDA_ARCHITECTURES ${ENABLE_ARCH})
-    endif()
 endforeach()
 
-
-target_link_libraries(geometry PUBLIC utils)
-target_link_libraries(mesh PUBLIC geometry utils)
-target_link_libraries(numerics PUBLIC utils)
+target_link_libraries(utils PUBLIC ${AVA_LINK_LIBRARIES})
+target_link_libraries(geometry PUBLIC utils ${AVA_LINK_LIBRARIES})
+target_link_libraries(mesh PUBLIC geometry utils ${AVA_LINK_LIBRARIES})
+target_link_libraries(numerics PUBLIC utils ${AVA_LINK_LIBRARIES})
 
 if (ENABLE_TRIANGLE_REDUNDANCY) 
-    target_compile_definitions(TRIANGLE_REDUNDANCY)
+    target_compile_definitions(mesh PRIVATE TRIANGLE_REDUNDANCY)
 endif()
 
 # ============================= Add directories ===============================
@@ -138,6 +133,14 @@ foreach(M ${STREAM_MODULES})
         )
     endif()
 endforeach()
+
+# ======================= Print install directories ===========================
+
+message(STATUS "Library install directory : ${CMAKE_INSTALL_LIBDIR}")
+message(STATUS "Python bindings install directory : ${PYTHON_INSTALL_DIR}")
+message(STATUS "Python bindings build directory : ${PYTHON_BUILD_DIR}")
+
+# ======================= Install targets =====================================
 
 install(
     EXPORT StreamTargets
@@ -166,35 +169,3 @@ install(
           "${CMAKE_CURRENT_BINARY_DIR}/StreamConfigVersion.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Stream"
 )
-
-# ========================= Print properties of files =========================
-
-get_target_property(geometry_COMPILE_OPTIONS geometry COMPILE_OPTIONS )
-message(STATUS "Stream::geometry compile options : ${geometry_COMPILE_OPTIONS}")
-
-message(STATUS "Stream::geometry sources and properties:")
-get_target_property(geometry_SOURCES geometry SOURCES)
-foreach(F ${geometry_SOURCES})
-    get_source_file_property(PROPS ${F} LANGUAGE)
-    string(REPLACE ${CMAKE_SOURCE_DIR} "" CLEAN_STRING ${F})
-    message("\t ${CLEAN_STRING} : ${PROPS}")
-endforeach()
-
-# List files and properties for build pipeline debug
-function(list_dir_without_cmake_src DIR_LIST)
-    foreach(DIR ${DIR_LIST})
-        string(REPLACE ${CMAKE_SOURCE_DIR} "" CLEAN_STRING ${DIR})
-        message("\t ${CLEAN_STRING}")
-    endforeach()
-endfunction()
-
-get_target_property(geometry_INCLUDE_DIRS geometry INCLUDE_DIRECTORIES )
-message(STATUS "Stream::geometry headers dirs (public + private + interface):")
-list_dir_without_cmake_src("${geometry_INCLUDE_DIRS}")
-
-# ======================= Print install directories ===========================
-
-message(STATUS "Library install directory : ${CMAKE_INSTALL_LIBDIR}")
-message(STATUS "Python bindings install directory : ${PYTHON_INSTALL_DIR}")
-message(STATUS "Python bindings build directory : ${PYTHON_BUILD_DIR}")
-

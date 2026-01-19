@@ -17,16 +17,16 @@
 # You should have received a copy of the GNU Lesser General Public License along with Stream. 
 # If not, see <https://www.gnu.org/licenses/>.
 # 
-target_sources(numerics
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/csr.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/conjugate_gradient.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/preconditioner_jacobi.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/linear_system.cpp
+
+set(NUMERICS_SRC
+    ${CMAKE_CURRENT_SOURCE_DIR}/csr.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/conjugate_gradient.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/preconditioner_jacobi.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/linear_system.cpp
 )
 
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/csr.cpp TARGET_DIRECTORY numerics PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/conjugate_gradient.cpp TARGET_DIRECTORY numerics PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/preconditioner_jacobi.cpp TARGET_DIRECTORY numerics PROPERTIES LANGUAGE CUDA)
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/linear_system.cpp TARGET_DIRECTORY numerics PROPERTIES LANGUAGE CUDA)
-endif()
+target_sources(numerics PRIVATE ${NUMERICS_SRC})
+
+foreach(file ${NUMERICS_SRC})
+    set_source_files_properties(${file} TARGET_DIRECTORY numerics PROPERTIES LANGUAGE ${AVA_LANGUAGE})
+endforeach()

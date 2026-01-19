@@ -28,12 +28,12 @@ Values used in the paper :
 
 | -n       |   -a    |
 |----------|---------|
-| 10k      | 0.024   |
-| 50k      | 0.0084  |
-| 100k     | 0.006   |
-| 500k     | 0.0018  |
-| 1M       | 0.0012  |
-| 10M      | 0.00035 |
+| 10000    | 0.024   |
+| 50000    | 0.0084  |
+| 100000   | 0.006   |
+| 500000   | 0.0018  |
+| 1000000  | 0.0012  |
+| 10000000 | 0.00035 |
 
 Example for running our 2D alpha-shape algorithm on 1M uniformly sampled points 
 using an alpha value of 0.0012 and 10 repetitions.

@@ -17,14 +17,15 @@
 # You should have received a copy of the GNU Lesser General Public License along with Stream. 
 # If not, see <https://www.gnu.org/licenses/>.
 # 
-target_sources(geometry
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ava_instanciation.cpp
+
+set(CORE_SRC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/ava_instanciation.cpp
 )
 
-target_sources(numerics
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ava_instanciation.cpp
-)
+target_sources(geometry PRIVATE ${CORE_SRC})
+target_sources(numerics PRIVATE ${CORE_SRC})
 
-if (ENABLE_CUDA) 
-    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/ava_instanciation.cpp TARGET_DIRECTORY geometry PROPERTIES LANGUAGE CUDA)
-endif()
+foreach(file ${CORE_SRC})
+    set_source_files_properties(${file} TARGET_DIRECTORY geometry PROPERTIES LANGUAGE ${AVA_LANGUAGE})
+    set_source_files_properties(${file} TARGET_DIRECTORY numerics PROPERTIES LANGUAGE ${AVA_LANGUAGE})
+endforeach()
