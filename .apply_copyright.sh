@@ -28,7 +28,7 @@ copyright="
 ${name} - Copyright (C) <${start_year}-${current_year}>
 <Universite catholique de Louvain (UCL), Belgique>
 
-List of the contributors to the development of Stream: see AUTHORS file.
+List of the contributors to the development of ${name}: see AUTHORS file.
 Description and complete License: see LICENSE file.
 
 This file is part of ${name}. ${name} is free software:
