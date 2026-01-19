@@ -3,9 +3,13 @@
 For reproducibility, this directory contains the benchmarks and testcases shown 
 in our IMR26 paper.
 
-Make sure to unzip the mesh dataset:
+Make sure to unzip the mesh dataset inside the build directory:
 ```console 
-unzip IMR26_GPU_AlphaShape_dataset.zip
+unzip IMR26_GPU_AlphaShape_dataset.zip -d <your build directory>
+
+# E.g:
+#   - if you are in the testcases/IMR26/ directory : unzip IMR26_GPU_AlphaShape_dataset.zip -d ../../build/
+#   - if you are in the top level directory : unzip testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip -d build/
 ```
 
 > [!NOTE] Note
@@ -20,7 +24,7 @@ This testcase was used to get the "Ours" column in table 1.a of our paper
 
 To see what command line options are available, run:
 ```console 
-$ cd <your build directory>
+$ cd build/
 $ ./testcases/IMR26/uniform2D --help
 ```
 
@@ -39,7 +43,7 @@ Example for running our 2D alpha-shape algorithm on 1M uniformly sampled points
 using an alpha value of 0.0012 and 10 repetitions.
 
 ```console 
-$ cd <your build directory>
+$ cd build/
 $  ./testcases/IMR26/uniform2D -n 1000000 -a 0.0012 -r 5 | column -t
 init 2244.595422 ms
 RNG  seed      :        42                                        
@@ -68,7 +72,7 @@ This testcase was used to get the "Ours" column in table 1.b of our paper
 
 To see what command line options are available, run:
 ```console 
-$ cd <your build directory>
+$ cd build/
 $ ./testcases/IMR26/uniform3D --help
 ```
 
@@ -86,7 +90,7 @@ Example for running our 3D alpha-shape algorithm on 100k uniformly sampled point
 using an alpha value of 0.022 and 10 repetitions.
 
 ```console 
-$ cd <your build directory>
+$ cd build/
 $  ./testcases/IMR26/uniform3D -n 100000 -a 0.022 -r 5 | column -t
 init 202.356052 ms
 RNG  seed      :        42                                      
@@ -111,26 +115,21 @@ Description of the columns:
 
 ## `run_on_simulation_meshes.py` 
 
-In order to be able to use the Python bindings, you can either :
-
-- Add the `build/` directory to your PYTHONPATH : `export PYTHONPATH=$PYTHONPATH:<path to your build>`
-- Set the `PYTHONPATH` on a per-command basis : `PYTHONPATH=$PYTHONPATH:<path to your build> python run_on_simulation_meshes.py`
-- Install the library system-wide : `sudo make install`
-
-The first method is better if you only intend to test the library, the second if you only intend to run this command 
-and the third if you intend to use the library in other scripts.
-
 This script can be used to reproduce the validation testcases of section 7.1 to 7.3.
 It is a Python script that will read the meshes from `./input_meshes/`. And 
 execute both the 2D-3D testcases using our library's Python API.
 
 Running the testcase :
 ```console 
-$  cd <your build directory>
-$  python run_on_simulation_meshes.py 
+$  cd build/
+$  PYTHONPATH=$PYTHONPATH:. python testcases/IMR26/run_on_simulation_meshes.py 
 [2D] Time to mesh './input_meshes/mesh_waterfall/mesh_waterfall_1e-03.bin' (4552 nodes, 8313 triangles) : 0.0008s
 [...]
 [2D] Time to mesh './input_meshes/mesh_dambreak/mesh_dambreak_1e-03.bin' (4201 nodes, 6771 triangles) : 0.0004s
 [...]
 [3D] Time to mesh './input_meshes/mesh_wine_glass.bin' (20037 nodes, 79049 tetrahedrons) : 0.0044s
 ```
+
+If you encounter errors of the form `Could not find input file: ...`, make sure
+you unzipped the `testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip` archive 
+in your build directory. I.e. there should be a directory `build/input_meshes/`

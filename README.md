@@ -1,5 +1,8 @@
 # Stream : a GPU implementation of the PFEM for incompressible free-surface flows.
 
+In order to reproduce benchmarks shown in our IMR26 paper, please refer to 
+[`./testcases/IMR26/README.md`](./testcases/IMR26/README.md) **after successful compilation of the project.**
+
 > [!NOTE] Stream 
 > A continuous flow of fluid, data or instructions.
 
@@ -11,15 +14,13 @@ of the Particle Finite Element Method pipeline :
 - Assembly of the linear system of equations 
 - Solution of the system
 
-In order to reproduce benchmarks shown in our IMR26 paper, please refer to 
-[`./testcases/IMR26/README.md`](./testcases/IMR26/README.md) after successful compilation of the project.
-
 ## Requirements 
 
 The bare minimum to be able to compile and run the code is the following :
 
 - CMake 
 - A C++ compiler supporting C++20 standard
+- git-lfs, to be able to download the datasets.
 
 Optional, but strongly recommended requirements include :
 
@@ -39,15 +40,20 @@ as well.
 
 ```bash 
 # Clone the repo and its dependencies
+# WARNING: make sure that no git-lfs errors occurs. If it does, make sure you have 
+# git-lfs installed and re-execute the command.
 git clone git@git.immc.ucl.ac.be:tihonn/stream.git --recurse-submodules
+
+cd stream
 
 # Create and enter build directory 
 mkdir build && cd build
 
 # Configure the project 
 cmake .. [additional config options]
-# Recommended for sequential CPU : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=OFF -DENABLE_TBB=OFF
+# Recommended for CPU : cmake .. -DCMAKE_BUILD_TYPE=Release
 # Recommended for CUDA : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON
+# Recommended for HIP : cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_HIP=ON
 
 # Compile the code. NOTE : -j is strongly recommended when compiling for GPU
 # as it is much slower than classical CPU compilation
@@ -62,8 +68,10 @@ sudo make install
 The configuration options are the following :
 
 - `-DENABLE_TESTS` (default = OFF) : compile the tests 
-- `-DENABLE_CUDA` (default = ON) : Compile for CUDA architecture. *Requires a CUDA compiler*.
+- `-DENABLE_CUDA` (default = OFF) : Compile for CUDA architecture. *Requires a CUDA compiler*.
+- `-DENABLE_HIP` (default = OFF) : Compile for HIP architecture. *Requires a HIP compiler*.
 - `-DENABLE_ARCH` (default = native) : Compile for a given architecture (valid for any target compilation).
+- `-DAVA_ENABLE_TBB` (default = on if TBB is found, off otherwise) : Use TBB as a CPU parallelization.
 
 The usual CMake configuration options such as `-DCMAKE_BUILD_TYPE` are also valid.
 
