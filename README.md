@@ -40,9 +40,12 @@ as well.
 
 ```bash 
 # Clone the repo and its dependencies
-# WARNING: make sure that no git-lfs errors occurs. If it does, make sure you have 
-# git-lfs installed and re-execute the command.
 git clone git@git.immc.ucl.ac.be:tihonn/stream.git --recurse-submodules
+
+# Make sure you have installed the "git-lfs" extension
+# e.g. To install it on Arch : sudo pacman -Sy git-lfs 
+git lfs install        # Setup git-lfs for the project
+git lfs pull           # Download the datasets
 
 cd stream
 
@@ -58,7 +61,10 @@ cmake .. [additional config options]
 # Compile the code. NOTE : -j is strongly recommended when compiling for GPU
 # as it is much slower than classical CPU compilation
 make -j
+``` 
 
+If you want to install the library system-wide, or in the prefix you gave CMake, run:
+```bash
 # (optional) System-wide install of the library 
 sudo make install
 ```

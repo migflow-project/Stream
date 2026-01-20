@@ -128,8 +128,6 @@ int main(int argc, char **argv) {
     // Parse arguments
     cmd_args_st args = parse_args(argc, argv);
     srand(args.rng);
-    printf("RNG seed : %u\n", args.rng);
-
 
     // ======================== Generate random points in [0, 1]^3 =================
     AvaHostArray<Sphere3D, int>::Ptr h_nodes = AvaHostArray<Sphere3D, int>::create({(int) args.npoints});
