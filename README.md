@@ -7,12 +7,16 @@ In order to reproduce benchmarks shown in our IMR26 paper, please refer to
 > A continuous flow of fluid, data or instructions.
 
 This library aims at providing a parallel implementation for all building blocks 
-of the Particle Finite Element Method pipeline :
+of the Particle Finite Element Method pipeline:
 
 - Mesh computation and adaptation
 - Free-surface detection
 - Assembly of the linear system of equations 
 - Solution of the system
+
+Currently, major updates to this repository occur when we publish our results 
+in papers. However, please feel free to open an issue if you encounter
+bugs or would like to request a feature for future updates.
 
 ## Requirements 
 
@@ -40,7 +44,10 @@ as well.
 
 ```bash 
 # Clone the repo and its dependencies
-git clone git@git.immc.ucl.ac.be:tihonn/stream.git --recurse-submodules
+git clone git@github.com:migflow-project/Stream.git --recurse-submodules
+
+# If you downloaded from a tag/release, make sure the submodules are up-to-date 
+git submodule update --recursive --init
 
 # Make sure you have installed the "git-lfs" extension
 # e.g. To install it on Arch : sudo pacman -Sy git-lfs 
