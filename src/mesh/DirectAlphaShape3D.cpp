@@ -74,7 +74,7 @@ void AlphaShape3D::set_nodes(const AvaHostArray<Sphere3D, int>::Ptr h_nodes) {
 // Get the permutation array mapping the original order to the morton-order
 uint32_t AlphaShape3D::getPermutation(std::vector<uint32_t>& perm) const {
     perm.resize(n_nodes);
-    gpu_memcpy(perm.data(), lbvh.d_map_sorted->data, sizeof(perm[0])*n_nodes, gpu_memcpy_device_to_host);
+    deep_copy(perm.data(), lbvh.d_map_sorted->data, n_nodes);
 
     return perm.size();
 }
@@ -82,7 +82,7 @@ uint32_t AlphaShape3D::getPermutation(std::vector<uint32_t>& perm) const {
 // Get the tetrahedrons in the alpha-shape
 uint32_t AlphaShape3D::getElem(std::vector<Elem>& tri) const {
     tri.resize(d_elemglob->size);
-    gpu_memcpy(tri.data(), d_elemglob->data, sizeof(tri[0])*d_elemglob->size, gpu_memcpy_device_to_host);
+    deep_copy(tri.data(), d_elemglob->data, d_elemglob->size);
     return tri.size();
 }
 
@@ -91,8 +91,8 @@ uint32_t AlphaShape3D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<ui
     nEdgeNodes.resize(n_nodes+1);
     edges.resize(n_edges);
 
-    gpu_memcpy(nEdgeNodes.data(), d_row->data, sizeof(nEdgeNodes[0])*(n_nodes+1), gpu_memcpy_device_to_host);
-    gpu_memcpy(edges.data(), d_neig->data, sizeof(edges[0])*(n_edges), gpu_memcpy_device_to_host);
+    deep_copy(nEdgeNodes.data(), d_row->data, n_nodes+1);
+    deep_copy(edges.data(), d_neig->data, n_edges);
 
     return edges.size();
 }
@@ -100,14 +100,14 @@ uint32_t AlphaShape3D::getEdge(std::vector<uint32_t>& nEdgeNodes, std::vector<ui
 // Get the boundary nodes in the alpha-shape
 uint32_t AlphaShape3D::getBoundaryNodes(std::vector<uint8_t>& _isBoundaryNode) const {
     _isBoundaryNode.resize(n_nodes);
-    gpu_memcpy(_isBoundaryNode.data(), d_node_is_bnd->data, sizeof(_isBoundaryNode[0])*(n_nodes), gpu_memcpy_device_to_host);
+    deep_copy(_isBoundaryNode.data(), d_node_is_bnd->data, n_nodes);
     return _isBoundaryNode.size();
 }
 
 // Get the set of 3D spheres (center, radius) in the morton-order
 uint32_t AlphaShape3D::getCoordsMorton(std::vector<Sphere3D>& coords_m) const {
     coords_m.resize(n_nodes);
-    gpu_memcpy(coords_m.data(), lbvh.d_obj_m->data, sizeof(coords_m[0])*(n_nodes), gpu_memcpy_device_to_host);
+    deep_copy(coords_m.data(), lbvh.d_obj_m->data, n_nodes);
     return coords_m.size();
 }
 
@@ -249,7 +249,7 @@ void AlphaShape3D::init() {
     );
 
     // Get the total number of collisions on host
-    gpu_memcpy(&n_neig, d_row_offset->data + n_nodes, sizeof(n_neig), gpu_memcpy_device_to_host);
+    deep_copy(&n_neig, d_row_offset->data + n_nodes, 1);
 
     AvaView<uint32_t, -1> d_offset_v = d_row_offset->to_view<-1>();
     AvaView<uint32_t, -1> d_block_offset_v = d_block_offset->to_view<-1>();
@@ -289,7 +289,7 @@ void AlphaShape3D::init() {
     );
 
     uint32_t total = 0;
-    gpu_memcpy(&total, d_block_offset->data + n_blocks, sizeof(total), gpu_memcpy_device_to_host);
+    deep_copy(&total, d_block_offset->data + n_blocks, 1);
 
     // Allocate memory of ELL/CSR arrays
     d_node_elemloc->resize({(int) (total + n_init_elem*n_nodes)});
@@ -698,10 +698,10 @@ void AlphaShape3D::compute(){
     d_temp_mem->resize({temp_mem_size});
 
     ava::scan::inclusive_sum(d_temp_mem->data, temp_mem_size, d_node_nelem_out->data, d_elemrow->data + 1, n_nodes);
-    gpu_memcpy(&n_elems, d_elemrow->data + n_nodes, sizeof(n_elems), gpu_memcpy_device_to_host);
+    deep_copy(&n_elems, d_elemrow->data + n_nodes, 1);
 
     ava::scan::inclusive_sum(d_temp_mem->data, temp_mem_size, d_node_nfneig->data, d_row->data + 1, n_nodes);
-    gpu_memcpy(&n_edges, d_row->data + n_nodes, sizeof(n_edges), gpu_memcpy_device_to_host);
+    deep_copy(&n_edges, d_row->data + n_nodes, 1);
 }
 
 void AlphaShape3D::compress() {
@@ -796,7 +796,7 @@ uint32_t AlphaShape3D_get_nelem(AlphaShape3D const * const ashape) {
 void AlphaShape3D_get_elem(AlphaShape3D const * const ashape, uint32_t * const elems){
     using Elem = AlphaShape3D::Elem;
 
-    gpu_memcpy(elems, ashape->d_elemglob->data, sizeof(Elem)*ashape->n_elems, gpu_memcpy_device_to_host);
+    deep_copy((Elem*) elems, ashape->d_elemglob->data, ashape->n_elems);
 }
 
 void AlphaShape3D_get_ordered_nodes(AlphaShape3D * const ashape, fp_tt * const nodes) {

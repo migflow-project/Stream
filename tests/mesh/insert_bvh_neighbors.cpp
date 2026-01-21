@@ -93,10 +93,10 @@ int main(int argc, char** argv) {
     printf("Remove super node time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     uint32_t root_id = 0;
-    gpu_memcpy(&root_id, mesh.lbvh.d_root->data, sizeof(root_id), gpu_memcpy_device_to_host);
+    deep_copy(&root_id, mesh.lbvh.d_root->data, 1);
 
     BBox2f root_data;
-    gpu_memcpy(&root_data, mesh.lbvh.d_internal_data->data + root_id, sizeof(root_data), gpu_memcpy_device_to_host);
+    deep_copy(&root_data, mesh.lbvh.d_internal_data->data + root_id, 1);
     printf(
         "===================== Bounding box ==================\n"
         "Total bb : (%.5f, %.5f) -- (%.5f, %.5f)\n",
@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
 
     FILE* fnode = fopen("nodes.txt", "w+");
     AvaHostArray<Vec2f, int>::Ptr h_nodes_m = AvaHostArray<Vec2f, int>::create({mesh.lbvh.d_obj_m->size});
-    gpu_memcpy(h_nodes_m->data(), mesh.lbvh.d_obj_m->data, sizeof(Vec2f)*h_nodes_m->size(), gpu_memcpy_device_to_host);
+    deep_copy(h_nodes_m->data(), mesh.lbvh.d_obj_m->data, h_nodes_m->size());
     for (int i = 0; i < h_nodes_m->size(); i++) {
         fprintf(fnode, "%.5f %.5f\n", h_nodes_m(i)[0], h_nodes_m(i)[1]);
     }
@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     mesh.compress_into_global();
 
     AvaHostArray<Mesh2D::Elem, int>::Ptr h_elem = AvaHostArray<Mesh2D::Elem, int>::create({mesh.d_elemglob->size});
-    gpu_memcpy(h_elem->data(), mesh.d_elemglob->data, sizeof(Mesh2D::Elem)*h_elem->size(), gpu_memcpy_device_to_host);
+    deep_copy(h_elem->data(), mesh.d_elemglob->data, h_elem->size());
     FILE* ftri = fopen("elem.txt", "w+");
     for (int i = 0; i < h_elem->size(); i++){
         Mesh2D::Elem elem = h_elem(i);
@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
     fclose(ftri);
 
     AvaHostArray<uint8_t, int>::Ptr h_node_is_complete = AvaHostArray<uint8_t, int>::create({(int) mesh.n_nodes});
-    gpu_memcpy(h_node_is_complete->data(), mesh.d_node_is_complete->data, sizeof(uint8_t)*h_node_is_complete->size(), gpu_memcpy_device_to_host);
+    deep_copy(h_node_is_complete->data(), mesh.d_node_is_complete->data, h_node_is_complete->size());
     FILE* fnode_complete = fopen("node_is_complete.txt", "w+");
     for (int i = 0; i < h_node_is_complete->size(); i++){
         fprintf(fnode_complete, "%u\n", h_node_is_complete(i));

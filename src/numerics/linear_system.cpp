@@ -39,7 +39,7 @@ void LinSys_set(LinSys* sys, const d_CSR *const A, const fp_tt *const b){
     sys->n = A->n;
     sys->d_csr = *A;
     sys->d_b->resize({(int) A->n});
-    gpu_memcpy(sys->d_b->data, b, A->n*sizeof(*b), gpu_memcpy_host_to_device);
+    deep_copy(sys->d_b->data, b, A->n);
 }
 
 } // extern C

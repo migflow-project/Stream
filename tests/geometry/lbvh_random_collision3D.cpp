@@ -73,7 +73,7 @@ int main(int argc, char** argv){
             (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     BBox3f root_data;
-    gpu_memcpy(&root_data, lbvh.d_internal_data->data, sizeof(BBox3f), gpu_memcpy_device_to_host);
+    deep_copy(&root_data, lbvh.d_internal_data->data, 1);
 
     printf(
         "Total bb : (%.5f, %.5f, %.5f) -- (%.5f, %.5f, %.5f)\n",
@@ -151,7 +151,7 @@ int main(int argc, char** argv){
     );
 
     int total;
-    gpu_memcpy(&total, d_ncoll->data+n, sizeof(total), gpu_memcpy_device_to_host);
+    deep_copy(&total, d_ncoll->data+n, 1);
     printf("Total number of collisions : %d\n", total);
 
     return EXIT_SUCCESS;

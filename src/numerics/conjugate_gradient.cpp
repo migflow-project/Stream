@@ -53,7 +53,7 @@ namespace stream::numerics {
 
         fp_tt dot = 0.0f;
         ava::reduce::sum(d_temp->data, temp_size, d_tmp_dot->data, d_dots->data, n);
-        gpu_memcpy(&dot, d_dots->data, sizeof(dot), gpu_memcpy_device_to_host);
+        deep_copy(&dot, d_dots->data, 1);
 
         return dot;
     }
@@ -222,17 +222,17 @@ void SolverCG_destroy(SolverCG* solver) {
 
 uint32_t SolverCG_jacobi_solve(SolverCG * solver, LinSys const * const sys, PrecJacobi_st const * const prec, fp_tt * x) {
     AvaDeviceArray<fp_tt, int>::Ptr sol = AvaDeviceArray<fp_tt, int>::create({(int) sys->n});
-    gpu_memcpy(sol->data, x, sys->n*sizeof(*x), gpu_memcpy_host_to_device);
+    deep_copy(sol->data, x, sys->n);
     uint32_t niter = solver->solve_precond(sys, prec, sol);
-    gpu_memcpy(x, sol->data, sys->n*sizeof(*x), gpu_memcpy_device_to_host);
+    deep_copy(x, sol->data, sys->n);
     return niter;
 }
 
 uint32_t SolverCG_solve(SolverCG * solver, LinSys const * const sys, fp_tt * x) {
     AvaDeviceArray<fp_tt, int>::Ptr sol = AvaDeviceArray<fp_tt, int>::create({(int) sys->n});
-    gpu_memcpy(sol->data, x, sys->n*sizeof(*x), gpu_memcpy_host_to_device);
+    deep_copy(sol->data, x, sys->n);
     uint32_t niter = solver->solve(sys, sol);
-    gpu_memcpy(x, sol->data, sys->n*sizeof(*x), gpu_memcpy_device_to_host);
+    deep_copy(x, sol->data, sys->n);
     return niter;
 }
 

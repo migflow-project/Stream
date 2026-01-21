@@ -38,9 +38,9 @@ namespace stream::numerics {
         d_col->resize({h_csr.h_col->size()});
         d_val->resize({h_csr.h_val->size()});
 
-        gpu_memcpy(d_row->data, h_csr.h_row->data(), h_csr.h_row->size()*sizeof(uint32_t), gpu_memcpy_host_to_device);
-        gpu_memcpy(d_col->data, h_csr.h_col->data(), h_csr.h_col->size()*sizeof(uint32_t), gpu_memcpy_host_to_device);
-        gpu_memcpy(d_val->data, h_csr.h_val->data(), h_csr.h_val->size()*sizeof(fp_tt), gpu_memcpy_host_to_device);
+        deep_copy(d_row->data, h_csr.h_row->data(), h_csr.h_row->size());
+        deep_copy(d_col->data, h_csr.h_col->data(), h_csr.h_col->size());
+        deep_copy(d_val->data, h_csr.h_val->data(), h_csr.h_val->size());
     }
 
     DeviceCSR::DeviceCSRView DeviceCSR::to_view(void) const noexcept {
@@ -93,9 +93,9 @@ namespace stream::numerics {
         h_col->resize({d_csr.d_col->size});
         h_val->resize({d_csr.d_val->size});
 
-        gpu_memcpy(h_row->data(), d_csr.d_row->data, d_csr.d_row->size*sizeof(uint32_t), gpu_memcpy_device_to_host);
-        gpu_memcpy(h_col->data(), d_csr.d_col->data, d_csr.d_col->size*sizeof(uint32_t), gpu_memcpy_device_to_host);
-        gpu_memcpy(h_val->data(), d_csr.d_val->data, d_csr.d_val->size*sizeof(fp_tt), gpu_memcpy_device_to_host);
+        deep_copy(h_row->data(), d_csr.d_row->data, d_csr.d_row->size);
+        deep_copy(h_col->data(), d_csr.d_col->data, d_csr.d_col->size);
+        deep_copy(h_val->data(), d_csr.d_val->data, d_csr.d_val->size);
     }
 
 } // namespace stream::numerics

@@ -59,7 +59,7 @@ int main(void) {
 
     AvaDeviceArray<fp_tt, int>::Ptr d_b = AvaDeviceArray<fp_tt, int>::create({(int) n});
     AvaDeviceArray<fp_tt, int>::Ptr d_x = AvaDeviceArray<fp_tt, int>::create({(int) n});
-    gpu_memcpy(d_b->data, b.data(), n*sizeof(float), gpu_memcpy_host_to_device);
+    deep_copy(d_b->data, b.data(), n);
 
     LinSys sys;
     sys.n = n;
@@ -74,7 +74,7 @@ int main(void) {
     uint32_t niter = cg.solve_precond(&sys, &prec, d_x);
     printf("Number of iterations : %u\n", niter);
     gpu_device_synchronise();
-    gpu_memcpy(x.data(), d_x->data, n*sizeof(float), gpu_memcpy_device_to_host);
+    deep_copy(x.data(), d_x->data, n);
     
     for (uint32_t i = 0; i < n; i++) {
         if (std::fabs(x[i] - b[i]/(i+1)) > 1e-7f) {

@@ -429,7 +429,6 @@ namespace stream::mesh {
 
         AvaView<uint32_t, -1> d_root_v = lbvh.d_root->template to_view<-1>();
         AvaView<uint32_t, -1, 2> d_children_v = lbvh.d_children->template to_view<-1, 2>();
-        AvaView<uint32_t, -1, 2> d_range_v = lbvh.d_range->template to_view<-1, 2>();
         AvaView<BBoxT, -1> d_internal_data_v = lbvh.d_internal_data->template to_view<-1>();
 
 
@@ -627,7 +626,7 @@ namespace stream::mesh {
                 d_num_selected->data, 
                 n_unfinished_nodes
             );
-            gpu_memcpy(&n_unfinished_nodes, d_num_selected->data, sizeof(uint32_t), gpu_memcpy_device_to_host);
+            deep_copy(&n_unfinished_nodes, d_num_selected->data, 1);
 
             gpu_device_synchronise();
             timespec_get(&t1, TIME_UTC);
@@ -772,7 +771,7 @@ namespace stream::mesh {
             n_nodes+1
         );
 
-        gpu_memcpy(&n_elems, d_node_nelem_out->data + n_nodes, sizeof(n_elems), gpu_memcpy_device_to_host);
+        deep_copy(&n_elems, d_node_nelem_out->data + n_nodes, 1);
         d_elemglob->resize({(int) n_elems});
 
         TriLoc const tloc_v = get_triloc_struct();
@@ -818,7 +817,7 @@ void Mesh2D_set_nodes(Mesh2D * const mesh, uint32_t nnodes, fp_tt const * const 
     using VecT = Mesh2D::VecT;
     AvaDeviceArray<VecT, int>::Ptr d_nodes = AvaDeviceArray<VecT, int>::create({(int) nnodes});
 
-    gpu_memcpy(d_nodes->data, nodes, sizeof(VecT)*nnodes, gpu_memcpy_host_to_device);
+    deep_copy(d_nodes->data, (VecT*) nodes, nnodes);
 
     mesh->d_nodes = d_nodes;
 }
@@ -855,11 +854,11 @@ uint32_t Mesh2D_get_nelem(Mesh2D * const mesh) {
 void Mesh2D_get_elem(Mesh2D * const mesh, uint32_t * const elems) {
     using Elem = Mesh2D::Elem;
 
-    gpu_memcpy(elems, mesh->d_elemglob->data, sizeof(Elem)*mesh->n_elems, gpu_memcpy_device_to_host);
+    deep_copy((Elem*) elems, mesh->d_elemglob->data, mesh->n_elems);
 }
 
 void Mesh2D_get_ordered_nodes(Mesh2D * const mesh, fp_tt * const nodes) {
-    gpu_memcpy(nodes, mesh->lbvh.d_obj_m->data, sizeof(Mesh2D::VecT)*mesh->n_nodes, gpu_memcpy_device_to_host);
+    deep_copy((Mesh2D::VecT*) nodes, mesh->lbvh.d_obj_m->data, mesh->n_nodes);
 }
 
 

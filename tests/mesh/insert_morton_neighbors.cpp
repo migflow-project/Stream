@@ -59,10 +59,10 @@ int main(void) {
     mesh.insert_by_circumsphere_checking();
 
     uint32_t root_id = 0;
-    gpu_memcpy(&root_id, mesh.lbvh.d_root->data, sizeof(root_id), gpu_memcpy_device_to_host);
+    deep_copy(&root_id, mesh.lbvh.d_root->data, 1);
 
     BBox2f root_data;
-    gpu_memcpy(&root_data, mesh.lbvh.d_internal_data->data + root_id, sizeof(root_data), gpu_memcpy_device_to_host);
+    deep_copy(&root_data, mesh.lbvh.d_internal_data->data + root_id, 1);
     printf(
         "===================== Bounding box ==================\n"
         "Total bb : (%.5f, %.5f) -- (%.5f, %.5f)\n",
@@ -73,7 +73,7 @@ int main(void) {
 
     FILE* fnode = fopen("nodes.txt", "w+");
     AvaHostArray<Vec2f, int>::Ptr h_nodes_m = AvaHostArray<Vec2f, int>::create({mesh.lbvh.d_obj_m->size});
-    gpu_memcpy(h_nodes_m->data(), mesh.lbvh.d_obj_m->data, sizeof(Vec2f)*h_nodes_m->size(), gpu_memcpy_device_to_host);
+    deep_copy(h_nodes_m->data(), mesh.lbvh.d_obj_m->data, h_nodes_m->size());
     for (int i = 0; i < h_nodes_m->size(); i++) {
         fprintf(fnode, "%.5f %.5f\n", h_nodes_m(i)[0], h_nodes_m(i)[1]);
     }
@@ -82,7 +82,7 @@ int main(void) {
     mesh.compress_into_global();
 
     AvaHostArray<Mesh2D::Elem, int>::Ptr h_elem = AvaHostArray<Mesh2D::Elem, int>::create({mesh.d_elemglob->size});
-    gpu_memcpy(h_elem->data(), mesh.d_elemglob->data, sizeof(Mesh2D::Elem)*h_elem->size(), gpu_memcpy_device_to_host);
+    deep_copy(h_elem->data(), mesh.d_elemglob->data, h_elem->size());
     FILE* ftri = fopen("elem.txt", "w+");
     for (int i = 0; i < h_elem->size(); i++){
         Mesh2D::Elem elem = h_elem(i);
