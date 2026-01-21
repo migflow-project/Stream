@@ -54,7 +54,7 @@ git submodule update --recursive --init
 git lfs install        # Setup git-lfs for the project
 git lfs pull           # Download the datasets
 
-cd stream
+cd Stream
 
 # Create and enter build directory 
 mkdir build && cd build
