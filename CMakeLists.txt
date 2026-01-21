@@ -103,7 +103,7 @@ foreach(M ${STREAM_MODULES})
     endforeach()
 endforeach()
 
-target_link_libraries(utils PUBLIC ${AVA_LINK_LIBRARIES})
+target_link_libraries(utils PUBLIC)
 target_link_libraries(geometry PUBLIC utils ${AVA_LINK_LIBRARIES})
 target_link_libraries(mesh PUBLIC geometry utils ${AVA_LINK_LIBRARIES})
 target_link_libraries(numerics PUBLIC utils ${AVA_LINK_LIBRARIES})
