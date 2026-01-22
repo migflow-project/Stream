@@ -21,7 +21,7 @@
 from subprocess import run
 import os
 
-def run_uniform2D(env):
+def run_uniform2D():
     npoints = [10000, 50000, 100000, 500000, 1000000, 10000000]
     alphas = [0.024, 0.0084, 0.006, 0.0018, 0.0012, 0.00042]
 
@@ -33,10 +33,10 @@ def run_uniform2D(env):
         ]
         print("="*70)
         print("Running command: ", " ".join(argv))
-        run(argv, env=env)
+        run(argv)
 
 
-def run_uniform3D(env):
+def run_uniform3D():
     npoints = [10000, 50000, 100000, 500000, 1000000]
     alphas = [0.06, 0.036, 0.024, 0.0144, 0.0108]
 
@@ -48,22 +48,22 @@ def run_uniform3D(env):
         ]
         print("="*70)
         print("Running command: ", " ".join(argv))
-        run(argv, env=env)
+        run(argv)
 
 
-def run_simulation_meshes(env):
+def run_simulation_meshes():
     argv = [ "python", "./testcases/IMR26/run_on_simulation_meshes.py"]
     print("="*70)
     print("Running command: ", " ".join(argv))
-    run(argv, env=env)
+    run(argv)
 
 
 if __name__ == "__main__":
 
     # PYTHONPATH used for running python processes
     pythonpath=f"@CMAKE_BINARY_DIR@:{os.getenv("PYTHONPATH")}"
-    env = {"PYTHONPATH": pythonpath}
+    os.environ["PYTHONPATH"] = pythonpath
 
-    run_uniform2D(env)
-    run_uniform3D(env)
-    run_simulation_meshes(env)
+    run_uniform2D()
+    run_uniform3D()
+    run_simulation_meshes()
