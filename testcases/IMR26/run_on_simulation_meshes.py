@@ -21,7 +21,22 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import stream.mesh as stm
 import pathlib
+import zipfile
 from time import perf_counter
+
+# This path will be automatically formated by CMake
+dataset_path = "@CMAKE_SOURCE_DIR@/testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip"
+print(f"Attempting to extract files from dataset located at: '{dataset_path}'")
+
+if (not pathlib.Path(dataset_path).exists()):
+    raise ValueError(f"The file '{dataset_path}' does not exist.")
+
+if (zipfile.is_zipfile(dataset_path)):
+    zipfile.ZipFile(dataset_path, "r").extractall()
+else:
+    raise ValueError(f"The dataset path '{dataset_path}' is not a valid .zip archive")
+
+print("Successfully extracted dataset")
 
 waterfall_files = [
     "./input_meshes/mesh_waterfall/mesh_waterfall_1e-03.bin",

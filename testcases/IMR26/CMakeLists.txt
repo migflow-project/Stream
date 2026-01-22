@@ -30,6 +30,7 @@ endforeach()
 
 set(PYTHON_IMR26_TESTS
     run_on_simulation_meshes.py
+    run_all.py
 )
 
 foreach(f ${PYTHON_IMR26_TESTS})

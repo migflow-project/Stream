@@ -171,9 +171,11 @@ int main(int argc, char **argv) {
     }
 
     // Print run statistics
-    printf("run alpha npoints ntri tlbvh tashape tcompress ttot\n");
+    printf("%-5s %-10s %-10s %-10s %-10s %-10s %-10s %-10s\n", 
+            "run", "alpha", "npoints", "ntri", "tlbvh", "tashape", "tcompress", "ttot");
     for (uint32_t i = 0; i < args.nruns; i++){
-        printf("%u %lf %u %u %lf %lf %lf %lf\n", i, args.alpha, args.npoints, edata[i].ntriangles, edata[i].tlbvh, edata[i].tashape, edata[i].tcompress, edata[i].ttot);
+        printf("%-5u %-10.3e %-10u %-10u %-10.3e %-10.3e %-10.3e %-10.3e\n",
+                i, args.alpha, args.npoints, edata[i].ntriangles, edata[i].tlbvh, edata[i].tashape, edata[i].tcompress, edata[i].ttot);
     }
     free(edata);
 
