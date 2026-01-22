@@ -36,6 +36,7 @@ SciPy                        BSD 3-Clause              https://github.com/scipy/
 matplotlib                   BSD/PSF                   https://matplotlib.org/stable/project/license.html
 gmsh                         GPL v2.0                  https://gitlab.onelab.info/gmsh/gmsh                         
 ava                          LGPL v3.0                 https://github.com/migflow-project/ava
+argp.h                       LGPL v2.1                 https://github.com/coreutils/gnulib/blob/master/lib/argp.h
 
 ********************************************************************************
 
@@ -1707,3 +1708,26 @@ the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 
+
+###################################
+argp.h 
+###################################
+
+Hierarchical argument parsing, layered over getopt.
+Copyright (C) 1995-2025 Free Software Foundation, Inc.
+This file is part of the GNU C Library.
+Written by Miles Bader <miles@gnu.ai.mit.edu>.
+
+The GNU C Library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+The GNU C Library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with the GNU C Library; if not, see
+<https://www.gnu.org/licenses/>. 

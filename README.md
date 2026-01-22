@@ -25,6 +25,7 @@ The bare minimum to be able to compile and run the code is the following :
 - CMake 
 - A C++ compiler supporting C++20 standard
 - git-lfs, to be able to download the datasets.
+- GNU `argp.h` for argument parsing. MacOS users can install it using homebrew, Linux users should have it installed by default on their system.
 
 Optional, but strongly recommended requirements include :
 
