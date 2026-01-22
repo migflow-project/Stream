@@ -52,7 +52,7 @@ namespace stream::numerics {
         });
 
         fp_tt dot = 0.0f;
-        ava::reduce::sum(d_temp->data, temp_size, d_tmp_dot->data, d_dots->data, n);
+        ERRCHK(ava::reduce::sum(d_temp->data, temp_size, d_tmp_dot->data, d_dots->data, n));
         deep_copy(&dot, d_dots->data, 1);
 
         return dot;

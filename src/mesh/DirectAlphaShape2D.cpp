@@ -225,21 +225,21 @@ void AlphaShape2D::init() {
     });
 
     // Compute the partial sum of the number of collisions
-    ava::scan::inclusive_sum(
+    ERRCHK(ava::scan::inclusive_sum(
         nullptr,
         temp_mem_size,
         d_node_nineig->data,
         d_row_offset->data + 1,
         n_nodes
-    );
+    ));
     d_temp_mem->resize({temp_mem_size});
-    ava::scan::inclusive_sum(
+    ERRCHK(ava::scan::inclusive_sum(
         d_temp_mem->data,
         temp_mem_size,
         d_node_nineig->data,
         d_row_offset->data + 1,
         n_nodes
-    );
+    ));
 
     // Get the total number of collisions on host
     deep_copy(&n_neig, d_row_offset->data + n_nodes, 1);
@@ -266,19 +266,19 @@ void AlphaShape2D::init() {
     });
 
     // Perform the partial sum of the blocks
-    ava::scan::inplace_inclusive_sum(
+    ERRCHK(ava::scan::inplace_inclusive_sum(
         nullptr, 
         temp_mem_size,
         d_block_offset->data,
         n_blocks+1
-    );
+    ));
     d_temp_mem->resize({temp_mem_size});
-    ava::scan::inplace_inclusive_sum(
+    ERRCHK(ava::scan::inplace_inclusive_sum(
         d_temp_mem->data,
         temp_mem_size, 
         d_block_offset->data,
         n_blocks+1
-    );
+    ));
 
     uint32_t total = 0;
     deep_copy(&total, d_block_offset->data + n_blocks, 1);
@@ -601,38 +601,38 @@ void AlphaShape2D::compute(){
 
     // ==================== Scan the number of edges/tri per nodes ============
     
-    ava::scan::inclusive_sum(
+    ERRCHK(ava::scan::inclusive_sum(
         nullptr,
         temp_mem_size,
         d_node_nelem_out->data,
         d_elemrow->data + 1,
         n_nodes
-    );
+    ));
     d_temp_mem->resize({temp_mem_size});
-    ava::scan::inclusive_sum(
+    ERRCHK(ava::scan::inclusive_sum(
         d_temp_mem->data,
         temp_mem_size, 
         d_node_nelem_out->data, 
         d_elemrow->data + 1,
         n_nodes
-    );
+    ));
     deep_copy(&n_elems, d_elemrow->data + n_nodes, 1);
 
-    ava::scan::inclusive_sum(
+    ERRCHK(ava::scan::inclusive_sum(
         nullptr,
         temp_mem_size,
         d_node_nfneig->data,
         d_row->data + 1,
         n_nodes
-    );
+    ));
     d_temp_mem->resize({temp_mem_size});
-    ava::scan::inclusive_sum(
+    ERRCHK(ava::scan::inclusive_sum(
         d_temp_mem->data,
         temp_mem_size,
         d_node_nfneig->data,
         d_row->data + 1,
         n_nodes
-    );
+    ));
     deep_copy(&n_edges, d_row->data + n_nodes, 1);
 }
 

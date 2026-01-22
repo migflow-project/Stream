@@ -151,7 +151,7 @@ namespace stream::geo {
                 return ret;
             };
 
-            ava::reduce::transform_reduce(
+            ERRCHK(ava::reduce::transform_reduce(
                 nullptr,
                 tmp_size,
                 d_obj->data,
@@ -159,11 +159,11 @@ namespace stream::geo {
                 n,
                 reduce_bbox_op,
                 transform_op,
-                bb_data);
+                bb_data));
 
             tmp->resize({tmp_size});
 
-            ava::reduce::transform_reduce(
+            ERRCHK(ava::reduce::transform_reduce(
                 tmp->data,
                 tmp_size,
                 d_obj->data,
@@ -171,7 +171,7 @@ namespace stream::geo {
                 n,
                 reduce_bbox_op,
                 transform_op,
-                bb_data);
+                bb_data));
         }
 
         // Compute the morton codes of the centroid of each object
@@ -214,25 +214,25 @@ namespace stream::geo {
 
         // Sort the objects according to their morton code
         void _sort_objects() {
-            ava::sort::sort_pairs(
+            ERRCHK(ava::sort::sort_pairs(
                 nullptr, 
                 tmp_size,
                 d_morton->data,
                 d_morton_sorted->data,
                 d_map->data,
                 d_map_sorted->data,
-                n);
+                n));
 
             tmp->resize({tmp_size});
 
-            ava::sort::sort_pairs(
+            ERRCHK(ava::sort::sort_pairs(
                 tmp->data, 
                 tmp_size,
                 d_morton->data,
                 d_morton_sorted->data,
                 d_map->data,
                 d_map_sorted->data,
-                n);
+                n));
 
             AvaView<ObjT, -1>     d_obj_v        = d_obj->template to_view<-1>();
             AvaView<ObjT, -1>     d_obj_m_v      = d_obj_m->template to_view<-1>();

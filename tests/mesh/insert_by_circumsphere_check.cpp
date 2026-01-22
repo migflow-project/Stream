@@ -70,25 +70,25 @@ int main(int argc, char** argv) {
 
     timespec_get(&t0, TIME_UTC);
     mesh.init();
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t1, TIME_UTC);
     printf("Init time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     timespec_get(&t0, TIME_UTC);
     mesh.insert_morton_neighbors();
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t1, TIME_UTC);
     printf("Morton neighbors insert time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     timespec_get(&t0, TIME_UTC);
     mesh.insert_by_circumsphere_checking();
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t1, TIME_UTC);
     printf("Circumsphere insertion time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     timespec_get(&t0, TIME_UTC);
     mesh.remove_super_nodes();
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t1, TIME_UTC);
     printf("Remove super node time : %.5f\n", (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 

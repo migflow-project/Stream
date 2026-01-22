@@ -180,7 +180,7 @@ namespace stream::geo {
                 return ret;
             };
 
-            ava::reduce::transform_reduce(
+            ERRCHK(ava::reduce::transform_reduce(
                 nullptr,
                 tmp_size,
                 d_obj->data,
@@ -188,11 +188,11 @@ namespace stream::geo {
                 n,
                 reduce_bbox_op,
                 transform_op,
-                bb_data);
+                bb_data));
 
             tmp->resize({tmp_size});
 
-            ava::reduce::transform_reduce(
+            ERRCHK(ava::reduce::transform_reduce(
                 tmp->data,
                 tmp_size,
                 d_obj->data,
@@ -200,7 +200,7 @@ namespace stream::geo {
                 n,
                 reduce_bbox_op,
                 transform_op,
-                bb_data);
+                bb_data));
         }
 
         // Compute the morton codes of the centroid of each object
@@ -243,25 +243,25 @@ namespace stream::geo {
 
         // Sort the objects according to their morton code
         void _sort_objects() {
-            ava::sort::sort_pairs(
+            ERRCHK(ava::sort::sort_pairs(
                 nullptr, 
                 tmp_size,
                 d_morton->data,
                 d_morton_sorted->data,
                 d_map->data,
                 d_map_sorted->data,
-                n);
+                n));
 
             tmp->resize({tmp_size});
 
-            ava::sort::sort_pairs(
+            ERRCHK(ava::sort::sort_pairs(
                 tmp->data, 
                 tmp_size,
                 d_morton->data,
                 d_morton_sorted->data,
                 d_map->data,
                 d_map_sorted->data,
-                n);
+                n));
 
             AvaView<ObjT, -1>     d_obj_v        = d_obj->template to_view<-1>();
             AvaView<ObjT, -1>     d_obj_m_v      = d_obj_m->template to_view<-1>();
@@ -640,28 +640,28 @@ namespace stream::geo {
 
             timespec_get(&t0, TIME_UTC);
             _compute_global_bbox();
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("Compute global bbox : %.5f ms\n",
                     (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
             timespec_get(&t0, TIME_UTC);
             _compute_morton_codes();
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("Compute morton codes: %.5f ms\n",
                     (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
             timespec_get(&t0, TIME_UTC);
             _sort_objects();
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("Sort objects according to morton codes: %.5f ms\n",
                     (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
             timespec_get(&t0, TIME_UTC);
             _build_hierarchy();
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("Build hierarchy (build+fit): %.5f ms\n",
                     (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
@@ -672,7 +672,7 @@ namespace stream::geo {
                 treelet_optimize(min_size_cur);
                 min_size_cur *= 2;
             }
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("Optimize hierarchy : %.5f ms\n",
                     (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);

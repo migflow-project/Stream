@@ -73,7 +73,7 @@ int main(void) {
 
     uint32_t niter = cg.solve_precond(&sys, &prec, d_x);
     printf("Number of iterations : %u\n", niter);
-    gpu_device_synchronise();
+    ava_device_sync();
     deep_copy(x.data(), d_x->data, n);
     
     for (uint32_t i = 0; i < n; i++) {

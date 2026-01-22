@@ -64,10 +64,10 @@ int main(int argc, char** argv){
     Sphere3DLBVH lbvh;
     lbvh.set_objects(d_coords);
     struct timespec t0, t1;
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t0, TIME_UTC);
     lbvh.build();
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t1, TIME_UTC);
     printf("Construction time : %f ms\n", 
             (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
@@ -84,7 +84,7 @@ int main(int argc, char** argv){
     AvaDeviceArray<int, int>::Ptr d_ncoll = AvaDeviceArray<int, int>::create({n+1});
     AvaView<int, -1> d_ncoll_v = d_ncoll->to_view<-1>();
 
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t0, TIME_UTC);
 
     AvaView<Sphere3D, -1> d_obj_m_v = lbvh.d_obj_m->to_view<-1>();
@@ -130,25 +130,25 @@ int main(int argc, char** argv){
         d_ncoll_v(0) = 0;
         d_ncoll_v(tid+1) = ncoll_loc;
     });
-    gpu_device_synchronise();
+    ava_device_sync();
     timespec_get(&t1, TIME_UTC);
     printf("Collision count time : %f ms\n", 
             (t1.tv_sec - t0.tv_sec)*1e3 + (t1.tv_nsec - t0.tv_nsec)*1e-6);
 
     size_t tmp_size = 0;
-    ava::scan::inplace_inclusive_sum(
+    ERRCHK(ava::scan::inplace_inclusive_sum(
         nullptr, 
         tmp_size, 
         d_ncoll->data+1,
         n
-    );
+    ));
     AvaDeviceArray<char, size_t>::Ptr tmp = AvaDeviceArray<char, size_t>::create({tmp_size});
-    ava::scan::inplace_inclusive_sum(
+    ERRCHK(ava::scan::inplace_inclusive_sum(
         tmp->data, 
         tmp_size, 
         d_ncoll->data+1,
         n
-    );
+    ));
 
     int total;
     deep_copy(&total, d_ncoll->data+n, 1);

@@ -588,7 +588,7 @@ namespace stream::mesh {
                 }
             });
 
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("\tFind: %.5f ms\n", 
                     (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
@@ -598,37 +598,37 @@ namespace stream::mesh {
             // Finished nodes do not insert anything and thus reduce the 
             // occupancy of the GPU : Compress the unfinished nodes to increase 
             // occupance on insertion
-            ava::select::flagged(
+            ERRCHK(ava::select::flagged(
                 nullptr,
                 temp_mem_size,
                 d_unfinished_nodes->data,
                 d_node_is_complete->data,
                 d_num_selected->data, 
                 n_unfinished_nodes
-            );
+            ));
 
             d_temp_mem->resize({temp_mem_size});
 
-            ava::select::flagged(
+            ERRCHK(ava::select::flagged(
                 d_temp_mem->data,
                 temp_mem_size,
                 d_unfinished_nodes->data,
                 d_node_is_complete->data,
                 d_num_selected->data, 
                 n_unfinished_nodes
-            );
+            ));
 
-            ava::select::flagged(
+            ERRCHK(ava::select::flagged(
                 d_temp_mem->data,
                 temp_mem_size,
                 d_node_is_complete->data,
                 d_node_is_complete->data,
                 d_num_selected->data, 
                 n_unfinished_nodes
-            );
+            ));
             deep_copy(&n_unfinished_nodes, d_num_selected->data, 1);
 
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("\tCompress: %.5f ms\n", 
                     (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
@@ -694,7 +694,7 @@ namespace stream::mesh {
                     d_node_nelemloc_v(node_id) = Tlast;
                     d_node_nneigloc_v(node_id) = cur_neig_loc;
             });
-            gpu_device_synchronise();
+            ava_device_sync();
             timespec_get(&t1, TIME_UTC);
             printf("\tInsert: %.5f ms\n", 
                     (t1.tv_sec-t0.tv_sec)*1e3 + (t1.tv_nsec-t0.tv_nsec)*1e-6);
@@ -757,19 +757,19 @@ namespace stream::mesh {
 
         // Perform a partial sum of the nelem_out array, giving the 
         // starting index of the outputted elements for each thread
-        ava::scan::inplace_inclusive_sum(
+        ERRCHK(ava::scan::inplace_inclusive_sum(
             nullptr, 
             temp_mem_size,
             d_node_nelem_out->data,
             n_nodes+1
-        );
+        ));
         d_temp_mem->resize({temp_mem_size});
-        ava::scan::inplace_inclusive_sum(
+        ERRCHK(ava::scan::inplace_inclusive_sum(
             d_temp_mem->data,
             temp_mem_size, 
             d_node_nelem_out->data,
             n_nodes+1
-        );
+        ));
 
         deep_copy(&n_elems, d_node_nelem_out->data + n_nodes, 1);
         d_elemglob->resize({(int) n_elems});
