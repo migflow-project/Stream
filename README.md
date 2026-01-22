@@ -6,8 +6,11 @@ In order to reproduce benchmarks shown in our IMR26 paper, please refer to
 > [!NOTE] Stream 
 > A continuous flow of fluid, data or instructions.
 
-This library aims at providing a parallel implementation for all building blocks 
-of the Particle Finite Element Method pipeline:
+**This library is a work in progress**. Its current goal is to allow readers of our
+paper(s) to reproduce our results.
+
+Its final goal is to provide a parallel (GPU) implementation for all
+building blocks of the Particle Finite Element Method pipeline:
 
 - Mesh computation and adaptation
 - Free-surface detection
@@ -24,7 +27,7 @@ The bare minimum to be able to compile and run the code is the following :
 
 - CMake 
 - A C++ compiler supporting C++20 standard
-- git-lfs, to be able to download the datasets.
+- git-lfs, to be able to download the datasets. See : [https://github.com/git-lfs/git-lfs]
 - GNU `argp.h` for argument parsing. MacOS users can install it using homebrew, Linux users should have it installed by default on their system.
 
 Optional, but strongly recommended requirements include :
@@ -33,6 +36,8 @@ Optional, but strongly recommended requirements include :
 - cub if you use CUDA / hipcub is you use AMD / TBB for CPU multithreading
 
 The library has been tested on Linux for CPU and CUDA architectures.
+I do not have an AMD system at my disposal, if you encounter problems running 
+the code on an AMD gpu, please open an issue.
 
 ## Compilation 
 
@@ -50,9 +55,8 @@ git clone git@github.com:migflow-project/Stream.git --recurse-submodules
 # If you downloaded from a tag/release, make sure the submodules are up-to-date 
 git submodule update --recursive --init
 
-# Make sure you have installed the "git-lfs" extension
+# Make sure you have installed git-lfs 
 # e.g. To install it on Arch : sudo pacman -Sy git-lfs 
-git lfs install        # Setup git-lfs for the project
 git lfs pull           # Download the datasets
 
 cd Stream

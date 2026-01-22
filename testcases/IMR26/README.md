@@ -3,26 +3,21 @@
 For reproducibility, this directory contains the benchmarks and testcases shown 
 in our IMR26 paper.
 
-Make sure to unzip the mesh dataset inside the build directory:
-```console 
-unzip testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip -d <your build directory>
-```
-
-There should be a `<your build directory>/input_meshes/` directory after this command.
-The input point clouds are provided in binary to reduce the repository's size, but they can 
-easily be read with the following Python command: 
-
-```python 
-# use a shape of (-1, 3) for 2D point clouds and (-1, 4) for 3D point clouds.
-# The file is a simple binary array of x, y, (z), alpha components.
-point_cloud = numpy.fromfile(filename, dtype=np.float32).reshape((-1, 3))   
-```
-
 > [!NOTE] Note
 > When rewriting the code for publication, I discovered some small performance losses due to the implementation. This cleaned up implementation should yield slightly better performances than explained in the paper. In addition, the performances strongly depends on the specifications of your hardware.
 > To get a rough idea of the speedup you should obtain on your hardware with regards to mine, you can look at the number of cores on your card and divide it by 3072 (the number of CUDA cores on my RTX4060). For example the RTX6000 used in the paper has roughly 18k cores and (for large point-cloud) you can observe a factor of 5-6 between the timings on both cards. 
 
 ---
+
+## Run all testcases at once 
+
+The Python script `build/testcases/IMR26/run_all.py`, allows to run all the test-cases described in this README at once.
+It will output each of the results in stdout. 
+
+```bash 
+cd build/
+python ./testcases/IMR26/run_all.py 
+```
 
 ## `uniform2D.cpp`
 
@@ -43,7 +38,7 @@ Values used in the paper :
 | 100000   | 0.006   |
 | 500000   | 0.0018  |
 | 1000000  | 0.0012  |
-| 10000000 | 0.00035 |
+| 10000000 | 0.00042 |
 
 Example for running our 2D alpha-shape algorithm on 1M uniformly sampled points 
 using an alpha value of 0.0012 and 10 repetitions.
@@ -127,7 +122,7 @@ for this command. This will allow to use the Python's binding of our library.
 Running the testcase :
 ```console 
 $  cd build/
-$  PYTHONPATH=$PYTHONPATH:. python testcases/IMR26/run_on_simulation_meshes.py 
+$  PYTHONPATH=.:$PYTHONPATH python testcases/IMR26/run_on_simulation_meshes.py 
 [2D] Time to mesh './input_meshes/mesh_waterfall/mesh_waterfall_1e-03.bin' (4552 nodes, 8313 triangles) : 0.0008s
 [...]
 [2D] Time to mesh './input_meshes/mesh_dambreak/mesh_dambreak_1e-03.bin' (4201 nodes, 6771 triangles) : 0.0004s
@@ -135,6 +130,16 @@ $  PYTHONPATH=$PYTHONPATH:. python testcases/IMR26/run_on_simulation_meshes.py
 [3D] Time to mesh './input_meshes/mesh_wine_glass.bin' (20037 nodes, 79049 tetrahedrons) : 0.0044s
 ```
 
-If you encounter errors of the form `Could not find input file: ...`, make sure
-you unzipped the `testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip` archive 
-in your build directory. I.e. there should be a directory `build/input_meshes/`
+This python script is supposed to unzip the dataset automatically, but
+if you encounter errors of the form `Could not find input file: ...`, make sure
+the archive `testcases/IMR26/IMR26_GPU_AlphaShape_dataset.zip` is unzipped 
+in your build directory. I.e. there should be a directory `build/input_meshes/`.
+
+The input point clouds are provided in binary to reduce the repository's size, but they can 
+easily be read with the following Python command if you want to test other point-sets: 
+
+```python 
+# use a shape of (-1, 3) for 2D point clouds and (-1, 4) for 3D point clouds.
+# The file is a simple binary array of x, y, (z), alpha components.
+point_cloud = numpy.fromfile(filename, dtype=np.float32).reshape((-1, 3))   
+```
